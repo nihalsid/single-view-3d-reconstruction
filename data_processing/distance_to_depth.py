@@ -107,7 +107,7 @@ def depth_to_gridspace(distance_map_path, intrinsic_path):
 if __name__ == "__main__":
     from pathlib import Path
 
-    distance_map_path = str(Path("data") / "raw" / "overfit" / "00000" / "distance_0010.exr")
+    distance_map_path = str(Path("data") / "raw" / "overfit" / "00000" / "distance.exr")
     intrinsic_path = (Path("data") / "raw" / "overfit" / "00000" / "intrinsic.txt")
     output_pt_cloud_path = Path("data") / "visualizations" / "overfit" / "00000" / "depth.obj"
 

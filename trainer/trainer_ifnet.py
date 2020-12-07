@@ -10,6 +10,7 @@ from dataset.implicit_dataset import ImplicitDataset
 from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import ModelCheckpoint
 import os
+import numpy as np
 
 
 class ImplicitRefinementTrainer(pl.LightningModule):
@@ -18,6 +19,7 @@ class ImplicitRefinementTrainer(pl.LightningModule):
         super(ImplicitRefinementTrainer, self).__init__()
         self.hparams = kwargs
         self.ifnet = IFNet()
+        self.dims = np.array((139, 104, 112), dtype=np.float32)
         self.dataset = lambda split: ImplicitDataset(split, self.hparams.datasetdir, self.hparams.num_points, self.hparams.splitsdir)
 
     def configure_optimizers(self):
@@ -46,7 +48,7 @@ class ImplicitRefinementTrainer(pl.LightningModule):
         output_vis_path.mkdir(exist_ok=True, parents=True)
         for item_idx in range(len(batch['name'])):
             base_name = batch["name"][0]
-            implicit_to_mesh(self.ifnet, batch['input'], 64, 0.5, output_vis_path / f"{base_name}_predicted.obj")
+            implicit_to_mesh(self.ifnet, batch['input'], np.round(self.dims).astype(np.int32), 0.5, output_vis_path / f"{base_name}_predicted.obj")
             visualize_sdf(batch['target'].squeeze().cpu().numpy(), output_vis_path / f"{base_name}_gt.obj", level=1)
         return {'loss': 0}
 

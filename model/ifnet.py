@@ -107,7 +107,7 @@ def make_3d_grid(bb_min, bb_max, shape):
 def evaluate_network_on_grid(network, x, resolution):
     points_batch_size = 131072
     pointsf = make_3d_grid(
-        (-0.5,)*3, (0.5,)*3, (resolution,)*3
+        (-0.5,)*3, (0.5,)*3, resolution
     )
     p_split = torch.split(pointsf, points_batch_size)
     values = []
@@ -117,7 +117,7 @@ def evaluate_network_on_grid(network, x, resolution):
             occ_hat = torch.sigmoid(network(x, pi))
         values.append(occ_hat.squeeze(0).detach().cpu())
     value = torch.cat(values, dim=0).numpy()
-    value_grid = value.reshape(resolution, resolution, resolution)
+    value_grid = value.reshape(resolution[0], resolution[1], resolution[2])
     return value_grid
 
 

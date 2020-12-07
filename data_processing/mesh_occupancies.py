@@ -12,6 +12,8 @@ def sample_points(mesh_path, dims, sample_num, sigma):
     mesh.apply_scale(1 / total_size)
     points = mesh.sample(sample_num)
     boundary_points = points + sigma * np.random.randn(sample_num, 3)
+    random_points = np.random.uniform(-0.5, 0.5, size=(int(sample_num * 0.1), 3))
+    boundary_points = np.vstack((boundary_points, random_points))
     grid_coords = boundary_points.copy()
     grid_coords[:, 0], grid_coords[:, 2] = boundary_points[:, 2], boundary_points[:, 0]
     grid_coords = 2 * grid_coords

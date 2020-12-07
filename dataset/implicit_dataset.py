@@ -25,9 +25,10 @@ class ImplicitDataset(Dataset):
         item = self.data[idx]
         sample_folder = Path(self.dataset_path) / "processed" / self.splitsdir / item
         sample_input = torch.from_numpy(np.load(sample_folder / "depth_grid.npz")['grid']).float()
-        sample_input = torch.nn.functional.interpolate(sample_input.unsqueeze(0).unsqueeze(0), scale_factor=0.5).squeeze()
+        # sample_input = torch.nn.functional.interpolate(sample_input.unsqueeze(0).unsqueeze(0), scale_factor=1).squeeze()
         sample_target = torch.from_numpy(read_df(str(sample_folder / "target.df"))).float()
-        # points = []
+        # sample_target = torch.nn.functional.interpolate(sample_target.unsqueeze(0).unsqueeze(0), scale_factor=1).squeeze()
+        points = []
         occupancies = []
         grids = []
 
@@ -37,17 +38,18 @@ class ImplicitDataset(Dataset):
             boundary_sample_coords = sample_points_occ_npz['grid_coords']
             boundary_sample_occupancies = sample_points_occ_npz['occupancies']
             subsample_indices = np.random.randint(0, boundary_sample_points.shape[0], self.num_points)
-            # points.extend(boundary_sample_points[subsample_indices])
+            points.extend(boundary_sample_points[subsample_indices])
             grids.extend(boundary_sample_coords[subsample_indices])
             occupancies.extend(boundary_sample_occupancies[subsample_indices])
 
-        # sample_points = torch.from_numpy(np.array(points, dtype=np.float32))  # * (1 - 16 / 64))
+        sample_points = torch.from_numpy(np.array(points, dtype=np.float32))  # * (1 - 16 / 64))
         sample_occupancies = torch.from_numpy(np.array(occupancies, dtype=np.float32))
         sample_grid = torch.from_numpy(np.array(grids, dtype=np.float32))
 
         return {
             'name': item,
-            'points': sample_grid,
+            'grid': sample_grid,
+            'points': sample_points,
             'input': sample_input.unsqueeze(0),
             'occupancies': sample_occupancies,
             'target': sample_target.unsqueeze(0)
