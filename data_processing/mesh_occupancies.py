@@ -7,7 +7,7 @@ from util.visualize import visualize_point_list
 
 def sample_points(mesh_path, dims, sample_num, sigma):
     mesh = trimesh.load(mesh_path)
-    total_size = np.array(dims).max()
+    total_size = np.array(dims)
     mesh.apply_translation(-np.array(dims)/2)
     mesh.apply_scale(1 / total_size)
     points = mesh.sample(sample_num)
