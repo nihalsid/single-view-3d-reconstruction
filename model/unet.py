@@ -115,3 +115,71 @@ class Unet(nn.Module):
         # state size is (nc) x 256 x 256
         # output = self.tanh(d8)
         return d8
+
+
+class UNetMini(nn.Module):
+    """ A smaller UNet with half the convolution layers.
+        Used for testing with the ground truth depth map where the input (240 x 320) and output (240 x 320) are not resized.
+    """
+
+    def __init__(
+        self,
+        num_filters=32,
+        channels_in=3,
+        channels_out=3,
+    ):
+        super(UNetMini, self).__init__()
+
+        conv_layer = get_conv_layer()
+
+        self.conv1 = conv_layer(channels_in, num_filters, 4, 2, 1)
+        self.conv2 = conv_layer(num_filters, num_filters * 2, 4, 2, 1)
+        self.conv3 = conv_layer(num_filters * 2, num_filters * 4, 4, 2, 1)
+        self.conv4 = conv_layer(num_filters * 4, num_filters * 8, 4, 2, 1)
+
+        self.up = nn.Upsample(scale_factor=2, mode="bilinear")
+
+        self.dconv5 = conv_layer(num_filters * 8 , num_filters * 4, 3, 1, 1)
+        self.dconv6 = conv_layer(num_filters * 4 * 2, num_filters * 2, 3, 1, 1)
+        self.dconv7 = conv_layer(num_filters * 2 * 2, num_filters, 3, 1, 1)
+        self.dconv8 = conv_layer(num_filters * 2, channels_out, 3, 1, 1)
+
+        norm_layer = get_batchnorm_layer()
+
+        self.batch_norm = norm_layer(num_filters)
+        self.batch_norm2_0 = norm_layer(num_filters * 2)
+        self.batch_norm2_1 = norm_layer(num_filters * 2)
+        self.batch_norm4_0 = norm_layer(num_filters * 4)
+        self.batch_norm4_1 = norm_layer(num_filters * 4)
+
+        self.leaky_relu = nn.LeakyReLU(0.2)
+        self.relu = nn.ReLU()
+
+    def forward(self, input):
+        # Encoder
+        # Convolution layers:
+        # input is (nc) x 240 x 320 
+        e1 = self.conv1(input)
+        # state size is (num_filters) x 120 x 160
+        e2 = self.batch_norm2_0(self.conv2(self.leaky_relu(e1)))
+        # state size is (num_filters x 2) x 60 x 80
+        e3 = self.batch_norm4_0(self.conv3(self.leaky_relu(e2)))
+        # state size is (num_filters x 4) x 30 x 40
+        e4 = self.conv4(self.leaky_relu(e3))
+
+        # Decoder
+        # Deconvolution layers:
+        # state size is (num_filters x 8) x 15 x 20
+        d5_ = self.batch_norm4_1(self.dconv5(self.up(self.relu(e4))))
+        # state size is (num_filters x 4) x 30 x 40
+        d5 = torch.cat((d5_, e3), 1)
+        d6_ = self.batch_norm2_1(self.dconv6(self.up(self.relu(d5))))
+        # state size is (num_filters x 2) x 60 x 80
+        d6 = torch.cat((d6_, e2), 1)
+        d7_ = self.batch_norm(self.dconv7(self.up(self.relu(d6))))
+        # state size is (num_filters) x 120 x 160
+        d7 = torch.cat((d7_, e1), 1)
+        d8 = self.dconv8(self.up(self.relu(d7)))
+        # state size is (nc) x 240 x 320 
+        # output = self.tanh(d8)
+        return d8

@@ -20,6 +20,7 @@ def parse_arguments():
     parser.add_argument('--batch_size', type=int, default=16, help='batch size')
     parser.add_argument('--experiment', type=str, default='fast_dev', help='experiment directory')
     parser.add_argument('--seed', type=int, default=-1, help='random seed')
+    parser.add_argument("--W", type=int, default=256)
 
     parser.add_argument('--num_points', type=int, default=2048)
 
