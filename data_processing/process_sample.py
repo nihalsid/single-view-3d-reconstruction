@@ -25,7 +25,7 @@ def process_sample(dataset_path, splitsdir, sample_name):
     copyfile(str(sample / "distance_field.df"), out / "target.df")
 
     for sigma in [0.01, 0.1]:
-        boundary_points, occupancies, grid_coords = sample_points(sample / "mesh.obj", dims, 100000, 0.01)
+        boundary_points, occupancies, grid_coords = sample_points(sample / "mesh.obj", dims, 100000, sigma)
         np.savez(out / f"occupancy_{sigma:.02f}", points=boundary_points, occupancies=occupancies, grid_coords=grid_coords)
 
 

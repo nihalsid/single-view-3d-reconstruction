@@ -23,6 +23,8 @@ def parse_arguments():
     parser.add_argument("--W", type=int, default=256)
 
     parser.add_argument('--num_points', type=int, default=2048)
+    parser.add_argument('--net_res', type=int, default=128, help='Architecture of the Network and number of features')
+    parser.add_argument('--inf_res', type=int, default=1, help='Multiple of inference resolution per training grid resolution')
 
     args = parser.parse_args()
 
