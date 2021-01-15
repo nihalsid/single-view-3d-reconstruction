@@ -139,3 +139,8 @@ cython_debug/
 
 runs
 .idea
+check math.ipynb
+data/processed/overfit/00000/depth_grid.npz
+.gitignore
+data/processed/overfit/00000/occupancy_0.10.npz
+*.ipynb

@@ -26,7 +26,7 @@ class ScenesDataset(Dataset):
         self.splitsdir = splitsdir
         self.split_shapes = [x.strip() for x in (Path("data/splits") / splitsdir / f"{split}.txt").read_text().split("\n") if x.strip() != ""]
         self.data = [x for x in self.split_shapes]
-        self.data = self.data * (50 if (splitsdir == 'overfit') and split == 'train' else 1)
+        self.data = self.data * (500 if (splitsdir == 'overfit') and split == 'train' else 1)
         self.input_transform = Compose(
             [
                 # SquarePad(),
@@ -44,13 +44,11 @@ class ScenesDataset(Dataset):
     def __getitem__(self, idx):
         item = self.data[idx]
         sample_folder = Path(self.dataset_path) / "raw" / self.splitsdir / item
-
-
-        sample_folder / "intrinsic.txt" 
         intrinsic_line_0 = (sample_folder / "intrinsic.txt").read_text().splitlines()[0]
         focal_length = float(intrinsic_line_0[2:].split(',')[0])
         
         image = Image.open(sample_folder / "rgb.png")
+        image = image.transpose(Image.FLIP_LEFT_RIGHT)
         sample_input = self.input_transform(image)
         # All distance channels are of the same value
         distance_map = pyexr.open(str(sample_folder / "distance.exr")).get("R")[:, :, 0]
@@ -58,8 +56,10 @@ class ScenesDataset(Dataset):
         # distance map to depth map
         transform = FromDistanceToDepth(focal_length)
         depth_map = transform(distance_map).astype('float32', casting='same_kind')
+        depth_map = np.flip(depth_map, 1)
+        depth_flipped = depth_map.copy()
         
-        sample_target = self.target_transform(depth_map)
+        sample_target = self.target_transform(depth_flipped)
 
         return {
             'name': item,

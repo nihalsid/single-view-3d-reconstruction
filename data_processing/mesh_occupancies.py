@@ -3,6 +3,7 @@ import trimesh
 import numpy as np
 import data_processing.implicit_waterproofing as iw
 from util.visualize import visualize_point_list
+import torch
 
 
 def sample_points(mesh_path, dims, sample_num, sigma):
@@ -19,6 +20,37 @@ def sample_points(mesh_path, dims, sample_num, sigma):
     grid_coords = 2 * grid_coords
     occupancies = iw.implicit_waterproofing(mesh, boundary_points)[0]
     return boundary_points, occupancies, grid_coords
+
+def determine_occupancy(mesh_path, points, dims=(139, 104, 112), sigma=0.01):
+    #normalize scale of points and mesh
+    print(points.shape)
+    points[:,:, 0] -= (dims[0] / 2)
+    points[:,:, 1] -= (dims[1] / 2)
+    points[:,:, 2] -= (dims[2] / 2)
+    points[:,:, 0] = (dims[0])
+    points[:,:, 1] = (dims[1])
+    points[:,:, 2] = (dims[2])
+
+    #please vectorize
+    occs = []
+    for i, path in enumerate(mesh_path): 
+
+        mesh = trimesh.load(path)
+        size = np.array(dims)
+        mesh.apply_translation(-size/2)
+        mesh.apply_scale(1 / size)
+
+        #points are in z,y,x system and mesh in x,y,z. Swap x & z. (Not sure about scale)
+        #grid_coords = points[i].clone().detach()
+        #grid_coords[:, 0], grid_coords[:, 2] = points[i,:, 2].squeeze(), points[i,:, 0].squeeze()
+        #grid_coords = 2 * grid_coords
+
+        #determine occupancy of points
+        occupancies = iw.implicit_waterproofing(mesh, points[i])[0]
+        occs.extend(occupancies)
+    #return points, occupancies, grid_coords
+    occs = torch.cat(occs)
+    return occs
 
 
 if __name__ == "__main__":
