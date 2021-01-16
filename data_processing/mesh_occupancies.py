@@ -23,7 +23,6 @@ def sample_points(mesh_path, dims, sample_num, sigma):
 
 def determine_occupancy(mesh_path, points, dims=(139, 104, 112), sigma=0.01):
     #normalize scale of points and mesh
-    print(points.shape)
     points[:,:, 0] -= (dims[0] / 2)
     points[:,:, 1] -= (dims[1] / 2)
     points[:,:, 2] -= (dims[2] / 2)

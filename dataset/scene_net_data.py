@@ -46,7 +46,6 @@ class scene_net_data(Dataset):
     def __getitem__(self, idx):
         item = self.data[idx]
         sample_folder = Path(self.dataset_path) / "raw" / self.splitsdir / item
-        mesh_folder = Path(self.dataset_path) / "visualizations" / self.splitsdir / item
         df_foler = Path(self.dataset_path) / "processed" / self.splitsdir / item
         
         image = Image.open(sample_folder / "rgb.png")
@@ -74,6 +73,17 @@ class scene_net_data(Dataset):
         sample_grid = torch.from_numpy(np.array(grids, dtype=np.float32))
         sample_input = torch.from_numpy(np.load(df_foler / "depth_grid.npz")['grid']).float()
 
+        distance_map = pyexr.open(str(sample_folder / "distance.exr")).get("R")[:, :, 0]
+
+        #depthmap target
+        intrinsic_line_0 = (sample_folder / "intrinsic.txt").read_text().splitlines()[0]
+        focal_length = float(intrinsic_line_0[2:].split(',')[0])
+        transform = FromDistanceToDepth(focal_length)
+        depth_map = transform(distance_map).numpy().astype('float32', casting='same_kind')
+        depth_map = np.flip(depth_map, 1)
+        depth_flipped = depth_map.copy()
+        depthmap_target = self.target_transform(depth_flipped)    
+        
         return {
             'name': item,
             'rgb': rgb_img,
@@ -81,5 +91,6 @@ class scene_net_data(Dataset):
             'points': sample_points,
             'input': sample_input.unsqueeze(0),
             'occupancies': sample_occupancies,
-            'target': sample_target.unsqueeze(0)
+            'target': sample_target.unsqueeze(0),
+            'depthmap_target': depthmap_target
         }

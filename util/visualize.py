@@ -1,6 +1,10 @@
 import marching_cubes as mc
 import numpy as np
 import trimesh
+from PIL import Image
+from pathlib import Path
+import pyexr
+import torch
 
 
 def to_point_list(s):
@@ -26,3 +30,20 @@ def visualize_grid(grid, output_path):
     if point_list.shape[0] > 0:
         base_mesh = trimesh.voxel.ops.multibox(centers=point_list, pitch=1)
         base_mesh.export(output_path)
+        
+def visualize_depthmap(depthmap, output_path):
+    if isinstance(depthmap, np.ndarray):
+        depthmap = depthmap.squeeze()
+
+    elif isinstance(depthmap, torch.Tensor):
+        depthmap = depthmap.squeeze().cpu().numpy()
+
+    else:
+        raise NotImplementedError
+
+    rescaled = (255.0 / depthmap.max() * (depthmap - depthmap.min())).astype(np.uint8)
+    im = Image.fromarray(rescaled)
+    im.save(str(output_path) +'.png')
+    pyexr.write(str(output_path) +'.exr', depthmap)
+
+    

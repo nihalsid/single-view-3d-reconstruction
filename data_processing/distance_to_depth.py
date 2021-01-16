@@ -22,7 +22,6 @@ class FromDistanceToDepth:
         xs = torch.arange(width) - cx
         ys = torch.arange(height) - cy
         xis, yis = torch.meshgrid(xs, ys)
-        print(xis.shape, yis.shape, distance_image.shape)
 
         depth = torch.sqrt(
             distance_image ** 2 / ((xis ** 2 + yis ** 2) / (self.focal_length ** 2) + 1)
@@ -157,7 +156,7 @@ if __name__ == "__main__":
     depth_map = pyexr.open(str(depth_map_path)).get("Z")[:,:,0]
     depth_map = torch.from_numpy(depth_map)
     pointcloud = depthmap_to_gridspace(depth_map)
-    pointcloud = pointcloud.reshape(-1,3)
+    pointcloud = pointcloud.reshape(-1,3).squeeze()
 
     #visualize_point_list(depth_grid_space, output_pt_cloud_path)
     visualize_point_list(pointcloud, output_pt_cloud_path)

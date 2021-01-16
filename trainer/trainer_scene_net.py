@@ -8,6 +8,7 @@ from model.unet import UNetMini
 from util import arguments
 from util.visualize import visualize_sdf
 from util.visualize import visualize_point_list
+from util.visualize import visualize_depthmap
 from dataset.scene_net_data import scene_net_data
 
 from data_processing.pointcloud2voxels3d_fast import voxel_occ_from_pc
@@ -16,9 +17,9 @@ from data_processing.distance_to_depth import depthmap_to_gridspace
 
 from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning import loggers as pl_loggers
 import os
 import numpy as np
-
 
 class SceneNetTrainer(pl.LightningModule):
 
@@ -44,30 +45,43 @@ class SceneNetTrainer(pl.LightningModule):
     
     def forward(self, batch):
         depthmap = self.unet(batch['rgb'])
-        #print(depthmap.shape, batch['input'].shape) torch.Size([16, 1, 240, 320]) torch.Size([16, 3, 240, 320])
         point_cloud = depthmap_to_gridspace(depthmap)
         voxel_occupancy = voxel_occ_from_pc(point_cloud).unsqueeze(1)
-        #print(voxel_occupancy.shape, point_cloud.shape) #point cloud = 16x1x320x240x3 // batch_size x width x heigth x 3
-        logits = self.ifnet(voxel_occupancy, point_cloud)
-        return logits, point_cloud
+        logits_depth = self.ifnet(voxel_occupancy, point_cloud)
+        return logits_depth, depthmap
 
     def training_step(self, batch, batch_idx):
-        logits_depth, point_cloud = self.forward(batch)
+        #forward with additional training supervision
+        logits_depth, depthmap = self.forward(batch)
         logits_mesh = self.ifnet(batch['input'], batch['points'])
+        #print(depthmap.shape, batch['depthmap_target'].shape) both torch.Size([2, 1, 240, 320])
+
+        #losses
+        reg_loss_depth = torch.nn.functional.mse_loss(depthmap, batch['depthmap_target'], reduction='none').sum(-1).mean()
         ce_loss_mesh = torch.nn.functional.binary_cross_entropy_with_logits(logits_mesh, batch['occupancies'], reduction='none').sum(-1).mean()
         ce_loss_depth = torch.nn.functional.binary_cross_entropy_with_logits(logits_depth, torch.ones_like(logits_depth), reduction='none').sum(-1).mean()
-        loss = ce_loss_mesh + ce_loss_depth
+        loss = ce_loss_mesh + ce_loss_depth + reg_loss_depth
+
+        self.log('loss', loss)
+        self.log('ce_loss_depth', ce_loss_depth)
+        self.log('ce_loss_mesh', ce_loss_mesh)
+        self.log('reg_loss_depth', reg_loss_depth)
         return {'loss': loss}
     
     def validation_step(self, batch, batch_idx):
         output_vis_path = Path("runs") / self.hparams.experiment / f"vis" / f'{(self.global_step // 1000):05d}'
         output_vis_path.mkdir(exist_ok=True, parents=True)
         for item_idx in range(len(batch['name'])):
+
+            #prepare items
             base_name = batch["name"][0]
-            implicit_to_mesh(self.ifnet, batch['input'], np.round(self.dims).astype(np.int32), 0.5, output_vis_path / f"{base_name}_predicted.obj")
-            point_cloud = depthmap_to_gridspace(self.unet(batch['rgb'])).squeeze()
-            point_cloud = point_cloud.reshape(-1,3)
+            depthmap = self.unet(batch['rgb'])
+            point_cloud = depthmap_to_gridspace(depthmap).squeeze().reshape(-1,3)
+            
+            #visualize outputs of network stages (depthmap, pointcloud, mesh)
+            visualize_depthmap(depthmap, output_vis_path / f"{base_name}_depthmap")
             visualize_point_list(point_cloud, output_vis_path / f"{base_name}_pc.obj")
+            implicit_to_mesh(self.ifnet, batch['input'], np.round(self.dims).astype(np.int32), 0.5, output_vis_path / f"{base_name}_predicted.obj")
             #visualize_sdf(batch['target'].squeeze().cpu().numpy(), output_vis_path / f"{base_name}_gt.obj", level=1)
         return {'loss': 0}
     
@@ -75,13 +89,16 @@ class SceneNetTrainer(pl.LightningModule):
 def train_scene_net(args):
     seed_everything(args.seed)
     checkpoint_callback = ModelCheckpoint(filepath=os.path.join("runs", args.experiment, 'checkpoints'), save_top_k=-1, verbose=False, period=args.save_epoch)
+    tb_logger = pl_loggers.TensorBoardLogger(save_dir=os.path.join("runs", 'logs/'))
     model = SceneNetTrainer(args)
     trainer = Trainer(gpus=args.gpu , num_sanity_val_steps=args.sanity_steps, checkpoint_callback=checkpoint_callback, max_epochs=args.max_epoch, limit_val_batches=args.val_check_percent,
-                      val_check_interval=min(args.val_check_interval, 1.0), check_val_every_n_epoch=max(1, args.val_check_interval), resume_from_checkpoint=args.resume, logger=None, benchmark=True)
+                      val_check_interval=min(args.val_check_interval, 1.0), check_val_every_n_epoch=max(1, args.val_check_interval), resume_from_checkpoint=args.resume, logger=tb_logger, benchmark=True)
 
     trainer.fit(model)
 
 
 if __name__ == '__main__':
+    import warnings
+    warnings.filterwarnings("ignore", category=UserWarning) 
     _args = arguments.parse_arguments()
     train_scene_net(_args)
