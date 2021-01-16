@@ -21,7 +21,7 @@ def visualize_point_list(grid, output_path):
 
 
 def visualize_sdf(sdf, output_path, level=0.75):
-    vertices, triangles = mc.marching_cubes(sdf, level)
+    vertices, triangles = mc.marching_cubes(sdf.astype(float), level)
     mc.export_obj(vertices, triangles, output_path)
 
 
@@ -31,7 +31,7 @@ def visualize_grid(grid, output_path):
         base_mesh = trimesh.voxel.ops.multibox(centers=point_list, pitch=1)
         base_mesh.export(output_path)
         
-def visualize_depthmap(depthmap, output_path):
+def visualize_depthmap(depthmap, output_path, flip=False):
     if isinstance(depthmap, np.ndarray):
         depthmap = depthmap.squeeze()
 
@@ -40,7 +40,8 @@ def visualize_depthmap(depthmap, output_path):
 
     else:
         raise NotImplementedError
-
+    if flip:
+        depthmap = np.flip(depthmap, axis=1)
     rescaled = (255.0 / depthmap.max() * (depthmap - depthmap.min())).astype(np.uint8)
     im = Image.fromarray(rescaled)
     im.save(str(output_path) +'.png')

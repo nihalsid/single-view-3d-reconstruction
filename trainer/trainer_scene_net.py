@@ -78,7 +78,7 @@ class SceneNetTrainer(pl.LightningModule):
             point_cloud = depthmap_to_gridspace(depthmap).squeeze().reshape(-1,3)
             
             #visualize outputs of network stages (depthmap, pointcloud, mesh)
-            visualize_depthmap(depthmap, output_vis_path / f"{base_name}_depthmap")
+            visualize_depthmap(depthmap, output_vis_path / f"{base_name}_depthmap", flip = True)
             visualize_point_list(point_cloud, output_vis_path / f"{base_name}_pc.obj")
             implicit_to_mesh(self.ifnet, batch['input'], np.round(self.dims).astype(np.int32), 0.5, output_vis_path / f"{base_name}_predicted.obj")
             #visualize_sdf(batch['target'].squeeze().cpu().numpy(), output_vis_path / f"{base_name}_gt.obj", level=1)
@@ -91,7 +91,8 @@ def train_scene_net(args):
     tb_logger = pl_loggers.TensorBoardLogger(save_dir=os.path.join("runs", 'logs/'))
     model = SceneNetTrainer(args)
     trainer = Trainer(gpus=args.gpu , num_sanity_val_steps=args.sanity_steps, checkpoint_callback=checkpoint_callback, max_epochs=args.max_epoch, limit_val_batches=args.val_check_percent,
-                      val_check_interval=min(args.val_check_interval, 1.0), check_val_every_n_epoch=max(1, args.val_check_interval), resume_from_checkpoint=args.resume, logger=tb_logger, benchmark=True)
+                      val_check_interval=min(args.val_check_interval, 1.0), check_val_every_n_epoch=max(1, args.val_check_interval), 
+                      resume_from_checkpoint=args.resume, logger=tb_logger, benchmark=True, profiler=args.profiler, precision=args.precision)
 
     trainer.fit(model)
 

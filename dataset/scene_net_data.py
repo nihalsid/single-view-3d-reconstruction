@@ -49,7 +49,7 @@ class scene_net_data(Dataset):
         df_foler = Path(self.dataset_path) / "processed" / self.splitsdir / item
         
         image = Image.open(sample_folder / "rgb.png")
-        image = image.transpose(Image.FLIP_LEFT_RIGHT)
+        #image = image.transpose(Image.FLIP_LEFT_RIGHT)
         rgb_img = self.input_transform(image)
 
         sample_target = torch.from_numpy(read_df(str(df_foler / "target.df"))).float().unsqueeze(0)
@@ -80,7 +80,7 @@ class scene_net_data(Dataset):
         focal_length = float(intrinsic_line_0[2:].split(',')[0])
         transform = FromDistanceToDepth(focal_length)
         depth_map = transform(distance_map).numpy().astype('float32', casting='same_kind')
-        depth_map = np.flip(depth_map, 1)
+        #depth_map = np.flip(depth_map, 1)
         depth_flipped = depth_map.copy()
         depthmap_target = self.target_transform(depth_flipped)    
         

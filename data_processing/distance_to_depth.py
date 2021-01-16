@@ -54,10 +54,11 @@ def coords_multiplication(A, B):
 def depth_to_camera(depth_map, f, cx, cy):
     #if depth_map.size() ## TO-DO: enable batching and non-batching mode. Currently only supports batched inputs
     bs = depth_map.shape[0]
-    u, v = torch.meshgrid(torch.arange(depth_map.shape[-2], device=depth_map.device), torch.arange(depth_map.shape[-1], device=depth_map.device))
+    v, u = torch.meshgrid(torch.arange(depth_map.shape[-2], device=depth_map.device), torch.arange(depth_map.shape[-1], device=depth_map.device))
     X = ((torch.multiply(u, depth_map) - cx * depth_map) / f)
     Y = -((torch.multiply(v, depth_map) - cy * depth_map) / f)
     Z = depth_map
+    #return X.flatten(), Y.flatten(), Z.flatten()
     return X.reshape((bs, -1)), Y.reshape((bs, -1)), Z.reshape((bs, -1))
 
 
@@ -113,6 +114,7 @@ def depth_to_gridspace(distance_map, intrinsic_path=None, read=True):
 
     # depth from camera to grid space
     depth_in_gridspace = (camera2frustum @ np.stack([X, Y, Z, np.ones_like(X)]))[:3, :].T
+    depth_in_gridspace = depth_in_gridspace.view(distance_map.shape[0], -1)
     return depth_in_gridspace
 
 def depthmap_to_gridspace(depthmap):
@@ -131,7 +133,8 @@ def depthmap_to_gridspace(depthmap):
     # depth from camera to grid space
     camera2frustum = camera2frustum.expand((X.shape[0],-1, -1))
     coords = torch.stack([X, Y, Z, torch.ones_like(X)]).transpose(1,0)
-    depth_in_gridspace = (camera2frustum @ coords)[:, :3].transpose(-1,-2)
+    #print(camera2frustum.shape, coords.shape)
+    depth_in_gridspace = (camera2frustum @ coords)[:,:3, :].transpose(-1,-2)
     return depth_in_gridspace
 
 def get_intrinsic(intrinsic_path):

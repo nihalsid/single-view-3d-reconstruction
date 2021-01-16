@@ -25,6 +25,10 @@ def parse_arguments():
     parser.add_argument('--num_points', type=int, default=2048)
     parser.add_argument('--net_res', type=int, default=128, help='Architecture of the Network and number of features')
     parser.add_argument('--inf_res', type=int, default=1, help='Multiple of inference resolution per training grid resolution')
+    parser.add_argument('--precision', type=int, default=32, help='float32 or float16 network precision')
+    parser.add_argument('--profiler', type=str, default=None, help='Profiler: None, simple or Advanced')
+    
+
 
     args = parser.parse_args()
 

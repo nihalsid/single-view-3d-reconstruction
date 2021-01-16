@@ -157,16 +157,21 @@ class IFNetFeatureExtractor128(nn.Module):
         p[:, :, 0], p[:, :, 1], p[:, :, 2] = [2 * points[:, :, 2], 2 * points[:, :, 1], 2 * points[:, :, 0]]
         p = p.unsqueeze(1).unsqueeze(1)
         p = torch.cat([p + d for d in self.displacments.to(p.device)], dim=2)  # (B,1,7,num_samples,3)
-        feature_0 = F.grid_sample(x, p)  # out : (B,C (of x), 1,1,sample_num)
 
+        p = p.to(x.dtype) #16bit support
+        feature_0 = F.grid_sample(x, p)  # out : (B,C (of x), 1,1,sample_num)
+        
         net = self.actvn(self.conv_in(x))
         net = self.conv_in_bn(net)
+        p = p.to(net.dtype) #16bit support
+
         feature_1 = F.grid_sample(net, p)  # out : (B,C (of x), 1,1,sample_num)
         net = self.maxpool(net)
 
         net = self.actvn(self.conv_0(net))
         net = self.actvn(self.conv_0_1(net))
         net = self.conv0_1_bn(net)
+
         feature_2 = F.grid_sample(net, p)  # out : (B,C (of x), 1,1,sample_num)
         net = self.maxpool(net)
 
