@@ -12,7 +12,6 @@ from util.visualize import visualize_depthmap
 from dataset.scene_net_data import scene_net_data
 
 from data_processing.pointcloud2voxels3d_fast import voxel_occ_from_pc
-from data_processing.mesh_occupancies import determine_occupancy as DO
 from data_processing.distance_to_depth import depthmap_to_gridspace
 
 from pytorch_lightning import Trainer, seed_everything
@@ -32,7 +31,7 @@ class SceneNetTrainer(pl.LightningModule):
         self.dataset = lambda split: scene_net_data(split, self.hparams.datasetdir, self.hparams.num_points, self.hparams.splitsdir)
 
     def configure_optimizers(self):
-        opt_g = torch.optim.Adam(self.ifnet.parameters(), lr=self.hparams.lr)
+        opt_g = torch.optim.Adam(list(self.unet.parameters()) + list(self.ifnet.parameters()), lr=self.hparams.lr)
         return [opt_g], []
     
     def train_dataloader(self):
