@@ -7,7 +7,7 @@ from PIL import Image
 from torchvision.transforms import Compose, Normalize, Resize, ToTensor
 import torchvision.transforms.functional as F
 
-from data_processing.distance_to_depth import FromDistanceToDepth
+from data_processing.distance_to_depth import FromDistanceToDepth, get_intrinsic
 
 class SquarePad:
 	def __call__(self, image):
@@ -44,9 +44,10 @@ class ScenesDataset(Dataset):
     def __getitem__(self, idx):
         item = self.data[idx]
         sample_folder = Path(self.dataset_path) / "raw" / self.splitsdir / item
-        intrinsic_line_0 = (sample_folder / "intrinsic.txt").read_text().splitlines()[0]
-        focal_length = float(intrinsic_line_0[2:].split(',')[0])
-        
+
+        intrinsics_matrix = get_intrinsic(Path("data/intrinsics.txt"))
+        focal_length = intrinsics_matrix[0][0]
+
         image = Image.open(sample_folder / "rgb.png")
         image = image.transpose(Image.FLIP_LEFT_RIGHT)
         sample_input = self.input_transform(image)
@@ -55,7 +56,7 @@ class ScenesDataset(Dataset):
 
         # distance map to depth map
         transform = FromDistanceToDepth(focal_length)
-        depth_map = transform(distance_map).astype('float32', casting='same_kind')
+        depth_map = transform(distance_map).numpy().astype('float32', casting='same_kind')
         depth_map = np.flip(depth_map, 1)
         depth_flipped = depth_map.copy()
         

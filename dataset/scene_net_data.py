@@ -7,7 +7,7 @@ from PIL import Image
 from torchvision.transforms import Compose, Normalize, Resize, ToTensor
 import torchvision.transforms.functional as F
 
-from data_processing.distance_to_depth import FromDistanceToDepth
+from data_processing.distance_to_depth import FromDistanceToDepth, get_intrinsic
 from data_processing.volume_reader import read_df
 
 class SquarePad:
@@ -76,8 +76,8 @@ class scene_net_data(Dataset):
         distance_map = pyexr.open(str(sample_folder / "distance.exr")).get("R")[:, :, 0]
 
         #depthmap target
-        intrinsic_line_0 = (sample_folder / "intrinsic.txt").read_text().splitlines()[0]
-        focal_length = float(intrinsic_line_0[2:].split(',')[0])
+        intrinsics_matrix = get_intrinsic(Path("data/intrinsics.txt"))
+        focal_length = intrinsics_matrix[0][0]
         transform = FromDistanceToDepth(focal_length)
         depth_map = transform(distance_map).numpy().astype('float32', casting='same_kind')
         #depth_map = np.flip(depth_map, 1)
