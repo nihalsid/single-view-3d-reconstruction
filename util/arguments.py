@@ -39,7 +39,7 @@ def parse_arguments():
         args.val_check_interval = int(args.val_check_interval)
 
     args.experiment = f"{datetime.now().strftime('%d%m%H%M')}_{args.experiment}"
-    if args.resume is not None and not args.new_exp_for_resume:
+    if args.resume is not None:
         args.experiment = Path(args.resume).parents[0].name
 
     return args

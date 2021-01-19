@@ -213,7 +213,7 @@ def make_3d_grid(bb_min, bb_max, shape, res_increase = args.inf_res):
 
 
 def evaluate_network_on_grid(network, x, resolution, res_increase = args.inf_res):
-    points_batch_size = 55000 #num_points * batch_size
+    points_batch_size = args.num_points * args.batch_size #55000 #num_points * batch_size
     pointsf = make_3d_grid(
         (-0.5,)*3, (0.5,)*3, resolution, res_increase
     )

@@ -20,6 +20,7 @@ from pytorch_lightning import loggers as pl_loggers
 import os
 import numpy as np
 
+
 class SceneNetTrainer(pl.LightningModule):
 
     def __init__(self, kwargs):
@@ -45,7 +46,7 @@ class SceneNetTrainer(pl.LightningModule):
     def forward(self, batch):
         depthmap = self.unet(batch['rgb'])
         point_cloud = depthmap_to_gridspace(depthmap)
-        voxel_occupancy = voxel_occ_from_pc(point_cloud).unsqueeze(1)
+        voxel_occupancy = voxel_occ_from_pc(point_cloud)
         logits_depth = self.ifnet(voxel_occupancy, point_cloud)
         return logits_depth, depthmap
 
@@ -53,18 +54,18 @@ class SceneNetTrainer(pl.LightningModule):
         #forward with additional training supervision
         logits_depth, depthmap = self.forward(batch)
         logits_mesh = self.ifnet(batch['input'], batch['points'])
-        #print(depthmap.shape, batch['depthmap_target'].shape) both torch.Size([2, 1, 240, 320])
 
         #losses
-        reg_loss_depth = torch.nn.functional.mse_loss(depthmap, batch['depthmap_target'], reduction='none').sum(-1).mean()
+        #reg_loss_depth = torch.nn.functional.mse_loss(depthmap, batch['depthmap_target'], reduction='none').sum(-1).mean()
         ce_loss_mesh = torch.nn.functional.binary_cross_entropy_with_logits(logits_mesh, batch['occupancies'], reduction='none').sum(-1).mean()
         ce_loss_depth = torch.nn.functional.binary_cross_entropy_with_logits(logits_depth, torch.ones_like(logits_depth), reduction='none').sum(-1).mean()
-        loss = ce_loss_mesh + ce_loss_depth + reg_loss_depth
-
+        loss = ce_loss_mesh + 500*ce_loss_depth# + reg_loss_depth
+        
         self.log('loss', loss)
         self.log('ce_loss_depth', ce_loss_depth)
         self.log('ce_loss_mesh', ce_loss_mesh)
-        self.log('reg_loss_depth', reg_loss_depth)
+        #self.log('reg_loss_depth', reg_loss_depth)
+
         return {'loss': loss}
     
     def validation_step(self, batch, batch_idx):
@@ -83,16 +84,29 @@ class SceneNetTrainer(pl.LightningModule):
             implicit_to_mesh(self.ifnet, batch['input'], np.round(self.dims).astype(np.int32), 0.5, output_vis_path / f"{base_name}_predicted.obj")
             #visualize_sdf(batch['target'].squeeze().cpu().numpy(), output_vis_path / f"{base_name}_gt.obj", level=1)
         return {'loss': 0}
+
+    def on_after_backward(self):
+    # example to inspect gradient information in tensorboard
+        if self.trainer.global_step % 25 == 0:  # don't make the tf file huge
+            params = self.state_dict()
+            for k, v in params.items():
+                grads = v
+                name = k
+                self.logger.experiment.add_histogram(tag=name, values=grads, global_step=self.trainer.global_step)
     
 
 def train_scene_net(args):
     seed_everything(args.seed)
     checkpoint_callback = ModelCheckpoint(filepath=os.path.join("runs", args.experiment, 'checkpoints'), save_top_k=-1, verbose=False, period=args.save_epoch)
     tb_logger = pl_loggers.TensorBoardLogger(save_dir=os.path.join("runs", 'logs/'))
-    model = SceneNetTrainer(args)
+    if args.resume is None:
+        model = SceneNetTrainer(args)
+    else:
+        model = SceneNetTrainer.load_from_checkpoint(args.resume)
+    
     trainer = Trainer(gpus=args.gpu , num_sanity_val_steps=args.sanity_steps, checkpoint_callback=checkpoint_callback, max_epochs=args.max_epoch, limit_val_batches=args.val_check_percent,
                       val_check_interval=min(args.val_check_interval, 1.0), check_val_every_n_epoch=max(1, args.val_check_interval), 
-                      resume_from_checkpoint=args.resume, logger=tb_logger, benchmark=True, profiler=args.profiler, precision=args.precision)
+                      resume_from_checkpoint=args.resume, logger=tb_logger, benchmark=True, profiler=args.profiler, precision=args.precision, log_gpu_memory='all')
 
     trainer.fit(model)
 

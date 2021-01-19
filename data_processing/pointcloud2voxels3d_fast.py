@@ -112,27 +112,28 @@ def voxel_occ_from_depth(depth_map):
     depth_grid_space = depth_to_gridspace(distance_map_path, intrinsic_path)
     depth_grid_space = norm_grid_space(depth_grid_space)
     voxelized_occupancy = pc_voxels(depth_grid_space, dims)
-    smoothed_voxelized_occupancy = voxels_smooth(voxelized_occupancy, kernels=smoothing_kernel(0.01, 3)).squeeze(0)
+    smoothed_voxelized_occupancy = voxels_smooth(voxelized_occupancy, kernels=smoothing_kernel(0.01, 3)).unsqueeze(1)
     return smoothed_voxelized_occupancy
 
 def voxel_occ_from_pc(point_cloud):
     dims=(139, 104, 112)
     point_cloud = norm_grid_space(point_cloud)
     voxelized_occupancy = pc_voxels(point_cloud, dims)
-    smoothed_voxelized_occupancy = voxels_smooth(voxelized_occupancy, kernels=smoothing_kernel(0.01, 3)).squeeze(0)
+    smoothed_voxelized_occupancy = voxels_smooth(voxelized_occupancy, kernels=smoothing_kernel(0.01, 3)).unsqueeze(1)
     return smoothed_voxelized_occupancy
 
 def norm_grid_space(point_cloud, dims=(139, 104, 112)):
     # center
-    point_cloud[:, 0] -= (dims[0] / 2)
-    point_cloud[:, 1] -= (dims[1] / 2)
-    point_cloud[:, 2] -= (dims[2] / 2)
+    #print(point_cloud.shape)
+    point_cloud[:,:, 0] -= (dims[0] / 2)
+    point_cloud[:,:, 1] -= (dims[1] / 2)
+    point_cloud[:,:, 2] -= (dims[2] / 2)
 
     # scale
     #print(point_cloud.shape)
-    point_cloud[:, 0] /= dims[0]
-    point_cloud[:, 1] /= dims[1]
-    point_cloud[:, 2] /= dims[2]
+    point_cloud[:,:, 0] /= dims[0]
+    point_cloud[:,:, 1] /= dims[1]
+    point_cloud[:,:, 2] /= dims[2]
     #dim_scaling = torch.tensor(dims)
     #point_cloud /= dim_scaling #values between -0.5 & 0.5
 
