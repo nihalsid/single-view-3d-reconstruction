@@ -60,13 +60,15 @@ class DepthRegressorTrainer(pl.LightningModule):
         return {'loss': mse_loss}
 
     def validation_step(self, batch, batch_idx):
-        output_vis_path = Path("runs") / self.hparams.experiment / f"vis" / f'{(self.global_step // 1000):05d}'
-        output_vis_path.mkdir(exist_ok=True, parents=True)
 
         prediction = self.forward(batch)
-        
-        depth_map = prediction[0].squeeze().cpu().numpy()
-        pyexr.write(str(output_vis_path / "depth_map.exr"), depth_map)
+
+        for i in range(len(batch['name'])):
+            output_vis_path = Path("runs") / self.hparams.experiment / f"vis" / f'{(self.global_step // 1000):05d}' / batch['name'][i]
+            output_vis_path.mkdir(exist_ok=True, parents=True)
+
+            depth_map = prediction[i].squeeze().cpu().numpy()
+            pyexr.write(str(output_vis_path / "depth_map.exr"), depth_map)
 
         mse_loss = torch.nn.functional.mse_loss(prediction, batch['target'], reduction='none').sum(-1).mean()
         self.log('val_loss', mse_loss)
