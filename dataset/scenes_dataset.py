@@ -27,14 +27,20 @@ class ScenesDataset(Dataset):
         self.split_shapes = [x.strip() for x in (Path("data/splits") / splitsdir / f"{split}.txt").read_text().split("\n") if x.strip() != ""]
         self.data = [x for x in self.split_shapes]
         self.data = self.data * (500 if (splitsdir == 'overfit') and split == 'train' else 1)
-        self.input_transform = Compose(
-            [
-                # SquarePad(),
-                # Resize((kwargs.W, kwargs.W)), #check whether needed
-                ToTensor(),
-                Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-            ]
-        )
+        
+        resize_transfrom = Compose([SquarePad(), Resize((kwargs.W, kwargs.W))])
+
+        if kwargs.resize_input:
+            self.input_transform = Compose(
+                [
+                    resize_transfrom,
+                    ToTensor(),
+                    Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+                ]
+            )
+        else:
+            self.input_transform = Compose([ToTensor(), Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+            
         self.target_transform = ToTensor()
 
 

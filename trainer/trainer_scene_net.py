@@ -1,9 +1,10 @@
 import pytorch_lightning as pl
 import torch
+from torch.nn.functional import interpolate 
 from pathlib import Path
 
 from model.ifnet import IFNet, implicit_to_mesh
-from model.unet import UNetMini
+from model.unet import Unet, UNetMini
 
 from util import arguments
 from util.visualize import visualize_sdf
@@ -27,7 +28,10 @@ class SceneNetTrainer(pl.LightningModule):
         super(SceneNetTrainer, self).__init__()
         self.hparams = kwargs
         self.ifnet = IFNet()
-        self.unet = UNetMini(channels_in=3, channels_out=1)
+        if self.hparams.resize_input:
+            self.unet = Unet(channels_in=3, channels_out=1)
+        else:
+            self.unet = UNetMini(channels_in=3, channels_out=1)
         self.dims = np.array((139, 104, 112), dtype=np.float32)
         self.dataset = lambda split: scene_net_data(split, self.hparams.datasetdir, self.hparams.num_points, self.hparams.splitsdir)
 
@@ -44,7 +48,15 @@ class SceneNetTrainer(pl.LightningModule):
         return torch.utils.data.DataLoader(dataset, batch_size=self.hparams.batch_size, shuffle=False, num_workers=self.hparams.num_workers, drop_last=False)
     
     def forward(self, batch):
-        depthmap = self.unet(batch['rgb'])
+        depthmap_original = self.unet(batch['rgb'])
+
+        # Resize back and remove extra zero padding if input was resized
+        if self.hparams.resize_input:
+            resized_depthmap = interpolate(depthmap, size= 320, mode='bilinear')
+            depthmap = resized_depthmap[:, :, 40:280, :] #TODO: Check whether the removed padding affects the gradient in any way
+        else: 
+            depthmap = depthmap_original
+            
         point_cloud = depthmap_to_gridspace(depthmap)
         voxel_occupancy = voxel_occ_from_pc(point_cloud)
         logits_depth = self.ifnet(voxel_occupancy, point_cloud)

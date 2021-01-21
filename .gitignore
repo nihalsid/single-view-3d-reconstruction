@@ -145,3 +145,6 @@ data/processed/overfit/00000/depth_grid.npz
 data/processed/overfit/00000/occupancy_0.10.npz
 *.ipynb
 /tmp.dot
+data/raw/full
+data/splits/full
+/trainer_unet.py

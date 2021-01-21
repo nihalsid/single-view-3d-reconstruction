@@ -27,8 +27,7 @@ def parse_arguments():
     parser.add_argument('--inf_res', type=int, default=1, help='Multiple of inference resolution per training grid resolution')
     parser.add_argument('--precision', type=int, default=32, help='float32 or float16 network precision')
     parser.add_argument('--profiler', type=str, default=None, help='Profiler: None, simple or Advanced')
-    
-
+    parser.add_argument('--resize_input', dest='resize_input', action='store_true', help='Square pad and resize the rgb image input')
 
     args = parser.parse_args()
 

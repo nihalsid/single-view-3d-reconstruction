@@ -14,6 +14,7 @@ def get_batchnorm_layer():
 
 class Unet(nn.Module):
     """ The depth regressor for predicting the depth map given an rgb image.
+        Requires that the input size is 256x256 or multiples of that.
     """
 
     def __init__(
