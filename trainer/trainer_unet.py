@@ -55,7 +55,7 @@ class DepthRegressorTrainer(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         logits = self.forward(batch)
 
-        mse_loss = torch.nn.functional.mse_loss(logits, batch['target'], reduction='none').sum(-1).mean()
+        mse_loss = torch.nn.functional.mse_loss(logits, batch['target'], reduction='mean')
         self.log('train_loss', mse_loss)
         return {'loss': mse_loss}
 
@@ -70,7 +70,7 @@ class DepthRegressorTrainer(pl.LightningModule):
             depth_map = prediction[i].squeeze().cpu().numpy()
             pyexr.write(str(output_vis_path / "depth_map.exr"), depth_map)
 
-        mse_loss = torch.nn.functional.mse_loss(prediction, batch['target'], reduction='none').sum(-1).mean()
+        mse_loss = torch.nn.functional.mse_loss(prediction, batch['target'], reduction='mean')
         self.log('val_loss', mse_loss)
         return {'loss': mse_loss}
 
