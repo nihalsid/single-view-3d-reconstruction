@@ -148,3 +148,5 @@ data/processed/overfit/00000/occupancy_0.10.npz
 data/raw/full
 data/splits/full
 /trainer_unet.py
+/losses.png
+/trainer_command.txt
