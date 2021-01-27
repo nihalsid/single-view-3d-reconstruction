@@ -149,4 +149,4 @@ data/raw/full
 data/splits/full
 /trainer_unet.py
 /losses.png
-*.txt
+/trainer_command.txt
