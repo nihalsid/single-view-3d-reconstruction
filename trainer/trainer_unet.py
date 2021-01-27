@@ -50,7 +50,10 @@ class DepthRegressorTrainer(pl.LightningModule):
         else: 
             logits = depthmap
 
-        return logits
+        # Apply sigmoid and renormalisation the values so the predicted depths fall within the per-dataset min and max values.
+        renormalized_depthmap = torch.sigmoid(logits) * (self.hparams.max_z - self.hparams.min_z) + self.hparams.min_z
+
+        return renormalized_depthmap
 
     def training_step(self, batch, batch_idx):
         logits = self.forward(batch)
@@ -78,7 +81,7 @@ class DepthRegressorTrainer(pl.LightningModule):
 def train_unet(args):
     seed_everything(args.seed)
     checkpoint_callback = ModelCheckpoint(filepath=os.path.join("runs", args.experiment, 'checkpoints'), save_top_k=1, monitor='val_loss', verbose=False, period=args.save_epoch)
-    tb_logger = pl_loggers.TensorBoardLogger(save_dir=os.path.join("runs", 'logs/'), name="UNet")
+    tb_logger = pl_loggers.TensorBoardLogger(save_dir=os.path.join("runs", 'logs/'), name="UNet", version=args.version)
     model = DepthRegressorTrainer(args)
     trainer = Trainer(gpus=[args.gpu], num_sanity_val_steps=args.sanity_steps, checkpoint_callback=checkpoint_callback, max_epochs=args.max_epoch, limit_val_batches=args.val_check_percent,
                       val_check_interval=min(args.val_check_interval, 1.0), check_val_every_n_epoch=max(1, args.val_check_interval), resume_from_checkpoint=args.resume, logger=tb_logger, benchmark=True, precision=args.precision)

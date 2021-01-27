@@ -63,10 +63,13 @@ class SceneNetTrainer(pl.LightningModule):
         else: 
             depthmap = depthmap_original
         
-        point_cloud = depthmap_to_gridspace(depthmap)
+        # Apply sigmoid and renormalisation the values so the predicted depths fall within the per-dataset min and max values.
+        renormalized_depthmap = torch.sigmoid(logits) * (self.hparams.max_z - self.hparams.min_z) + self.hparams.min_z
+
+        point_cloud = depthmap_to_gridspace(renormalized_depthmap)
         voxel_occupancy = voxel_occ_from_pc(point_cloud)
         logits_depth = self.ifnet(voxel_occupancy, point_cloud)
-        return logits_depth, depthmap
+        return logits_depth, renormalized_depthmap
 
     def training_step(self, batch, batch_idx):
         #forward with additional training supervision
