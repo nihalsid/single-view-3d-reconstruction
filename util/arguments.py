@@ -28,6 +28,8 @@ def parse_arguments():
     parser.add_argument('--precision', type=int, default=32, help='float32 or float16 network precision')
     parser.add_argument('--profiler', type=str, default=None, help='Profiler: None, simple or Advanced')
     parser.add_argument('--resize_input', dest='resize_input', action='store_true', help='Square pad and resize the rgb image input')
+    parser.add_argument('--pretrain_unet', default=None, help='use a pretrained Unet')
+    parser.add_argument('--visualize', dest='visualize', action='store_true', help='Output visualizations every validation')
 
     args = parser.parse_args()
 

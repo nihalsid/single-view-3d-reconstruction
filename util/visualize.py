@@ -40,6 +40,7 @@ def visualize_depthmap(depthmap, output_path, flip=False):
 
     else:
         raise NotImplementedError
+
     if flip:
         depthmap = np.flip(depthmap, axis=1)
     rescaled = (255.0 / depthmap.max() * (depthmap - depthmap.min())).astype(np.uint8)
@@ -47,4 +48,17 @@ def visualize_depthmap(depthmap, output_path, flip=False):
     im.save(str(output_path) +'.png')
     pyexr.write(str(output_path) +'.exr', depthmap)
 
-    
+def scale(path):
+    dims = (139, 104, 112)
+    mesh = trimesh.load(path, process=False)
+    total_size = np.array(dims)
+    #mesh.apply_translation(-np.array(dims)/2)
+    mesh.apply_scale(1 / total_size)
+    new_path = str(path)[:-4] + "_scaled.obj"
+    print(new_path)
+    mesh.export(new_path)
+
+if __name__ == "__main__":
+    path = Path("/home/alex/Documents/ifnet_scenes-main/ifnet_scenes/data/visualizations/overfit/00000")
+    path = path / "mesh.obj"
+    scale(path)

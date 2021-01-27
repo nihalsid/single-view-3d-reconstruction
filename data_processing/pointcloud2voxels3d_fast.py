@@ -107,19 +107,19 @@ def voxels_smooth(voxels, kernels, scale=None):
 
     return voxels
 
-def voxel_occ_from_depth(depth_map):
+def voxel_occ_from_depth(depth_map, sigma=0.01, kernel_size=3):
     intrinsic_path = (Path("data") / "raw" / "overfit" / "00000" / "intrinsic.txt")
     depth_grid_space = depth_to_gridspace(distance_map_path, intrinsic_path)
     depth_grid_space = norm_grid_space(depth_grid_space)
     voxelized_occupancy = pc_voxels(depth_grid_space, dims)
-    smoothed_voxelized_occupancy = voxels_smooth(voxelized_occupancy, kernels=smoothing_kernel(0.01, 3)).unsqueeze(1)
+    smoothed_voxelized_occupancy = voxels_smooth(voxelized_occupancy, kernels=smoothing_kernel(sigma, kernel_size)).unsqueeze(1)
     return smoothed_voxelized_occupancy
 
-def voxel_occ_from_pc(point_cloud):
+def voxel_occ_from_pc(point_cloud, sigma=0.01, kernel_size=3):
     dims=(139, 104, 112)
     point_cloud = norm_grid_space(point_cloud)
     voxelized_occupancy = pc_voxels(point_cloud, dims)
-    smoothed_voxelized_occupancy = voxels_smooth(voxelized_occupancy, kernels=smoothing_kernel(0.01, 3)).unsqueeze(1)
+    smoothed_voxelized_occupancy = voxels_smooth(voxelized_occupancy, kernels=smoothing_kernel(sigma, kernel_size)).unsqueeze(1)
     return smoothed_voxelized_occupancy
 
 def norm_grid_space(point_cloud, dims=(139, 104, 112)):

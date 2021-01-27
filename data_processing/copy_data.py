@@ -36,26 +36,25 @@ if __name__ == '__main__':
         os.makedirs(str(target_path))
 
     scenes_folders = glob.glob(str(source_path / '2d' / "**"))
+    scenes_folders = sorted([folder.split("/")[-1] for folder in scenes_folders])
 
-    sample_counter = 0
     print(len(scenes_folders))
     # Loop over 2d and 3d files and copy them to destination
+    scene_counter = 0
     for scene_folder in scenes_folders:
         views = zip(sorted(glob.glob(str(source_path / '2d' / scene_folder / "*.png"))),
         sorted(glob.glob(str(source_path / '2d' / scene_folder / "campose*.npy"))),
         sorted(glob.glob(str(source_path / '2d' / scene_folder / "distance*.exr"))),
         sorted(glob.glob(str(source_path / '3d' / scene_folder / "distance_field*.df")))
         )
-
-        for sample in views:
-            sample_path = target_path / ('{:0>4}'.format(sample_counter))
+        for i, sample in enumerate(views):
+            sample_path = target_path / ('{:0>4}'.format(scene_counter)) / str(i)
             os.makedirs(str(sample_path))
 
             shutil.copy(sample[0], str(sample_path / "rgb.png"))
             shutil.copy(sample[1], str(sample_path / "campose.npy"))
             shutil.copy(sample[2], str(sample_path / "distance.exr"))
             shutil.copy(sample[3], str(sample_path / "distance_field.df"))
-            sample_counter += 1
-
+        scene_counter += 1
     
 

@@ -10,6 +10,10 @@ import torchvision.transforms.functional as F
 from data_processing.distance_to_depth import FromDistanceToDepth, get_intrinsic
 from data_processing.volume_reader import read_df
 
+# make datatype dependent on argparse
+#from util import arguments
+#_args = arguments.parse_arguments()
+
 class SquarePad:
 	def __call__(self, image):
 		w, h = image.size
@@ -22,6 +26,7 @@ class SquarePad:
 class scene_net_data(Dataset):
 
     def __init__(self, split, dataset_path, num_points, splitsdir, kwargs=None):
+        self.kwargs = kwargs
         self.dataset_path = Path(dataset_path)
         self.split = split
         self.splitsdir = splitsdir
@@ -29,7 +34,7 @@ class scene_net_data(Dataset):
         self.data = [x for x in self.split_shapes]
         self.data = self.data * (500 if (splitsdir == 'overfit') and split == 'train' else 1)
         self.num_points = num_points
-
+        print(split, dataset_path, splitsdir)
         resize_transfrom = Compose([SquarePad(), Resize((kwargs.W, kwargs.W))])
 
         if kwargs.resize_input:
@@ -58,7 +63,7 @@ class scene_net_data(Dataset):
         #image = image.transpose(Image.FLIP_LEFT_RIGHT)
         rgb_img = self.input_transform(image)
 
-        sample_target = torch.from_numpy(read_df(str(df_foler / "target.df"))).float().unsqueeze(0)
+        sample_target = torch.from_numpy(read_df(str(df_foler / "distance_field.df"))).float().unsqueeze(0)
 
         points = []
         occupancies = []
@@ -98,5 +103,5 @@ class scene_net_data(Dataset):
             'input': sample_input.unsqueeze(0),
             'occupancies': sample_occupancies,
             'target': sample_target.unsqueeze(0),
-            'depthmap_target': depthmap_target
+            'depthmap_target': depthmap_target.squeeze()
         }
