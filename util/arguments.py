@@ -27,9 +27,13 @@ def parse_arguments():
     parser.add_argument('--inf_res', type=int, default=1, help='Multiple of inference resolution per training grid resolution')
     parser.add_argument('--precision', type=int, default=32, help='float32 or float16 network precision')
     parser.add_argument('--profiler', type=str, default=None, help='Profiler: None, simple or Advanced')
+    parser.add_argument('--version', type=str, default=None, help='version for logs name')
     parser.add_argument('--resize_input', dest='resize_input', action='store_true', help='Square pad and resize the rgb image input')
     parser.add_argument('--pretrain_unet', default=None, help='use a pretrained Unet')
     parser.add_argument('--visualize', dest='visualize', action='store_true', help='Output visualizations every validation')
+    parser.add_argument('--min_z', type=float, default=0.1953997164964676, help='minimum depth value for the dataset. Used during normalization of predicted depth.')
+    # The actual max depth is 24.600257873535156 but very few points exceed the value of 7, so 7 is used instead.
+    parser.add_argument('--max_z', type=float, default=7.0, help='maximum depth value for the dataset. Used during normalization of predicted depth.')
 
     args = parser.parse_args()
 
