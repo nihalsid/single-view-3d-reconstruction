@@ -16,7 +16,7 @@ if __name__ == '__main__':
     parser.add_argument('--train_percentage', type=float, default=0.35)
     parser.add_argument('--val_percentage', type=float, default=0.10)
     parser.add_argument('--test_percentage', type=float, default=0.05)
-    parser.add_argument('--target_path', type=str, default="data/splits/ifnet_two_thirds/")
+    parser.add_argument('--target_path', type=str, default="data/splits/full_data/")
 
     parser.add_argument('--dataset_path', type=str, default="/media/alex/01D6C1999581FF10/Users/alexs/OneDrive/Desktop/3dfront_share/processed/")
 
@@ -28,7 +28,7 @@ if __name__ == '__main__':
     test_percentage = args.test_percentage
     target_path = Path(args.target_path)
 
-    splitsdir = {'train':[], 'val':[], 'test':[], 'train2':[] }
+    splitsdir = {'train':[], 'val':[], 'test':[]}
     splitpercent = {'train': train_percentage, 'myval': val_percentage, 'mytest': test_percentage}
     for split in splitsdir.keys():
         d_path = Path(dataset_path) / split

@@ -34,7 +34,7 @@ class SceneNetTrainer(pl.LightningModule):
         else:
             self.unet = UNetMini(channels_in=3, channels_out=1)
 
-        self.dims = torch.tensor([139, 104, 112], dtype=np.float32, device=self.device)
+        self.dims = torch.tensor([139, 104, 112], device=self.device)
         self.dataset = lambda split: scene_net_data(split, self.hparams.datasetdir, self.hparams.num_points, self.hparams.splitsdir, self.hparams)
 
     #Here you could set different learning rates for different layers
@@ -63,13 +63,15 @@ class SceneNetTrainer(pl.LightningModule):
         # Resize back and remove extra zero padding if input was resized
         if self.hparams.resize_input:
             resized_depthmap = interpolate(depthmap_original, size= 320, mode='bilinear')
-            depthmap = resized_depthmap[:, :, 40:280, :].squeeze(1) #TODO: Check whether the removed padding affects the gradient in any way
+            logits = resized_depthmap[:, :, 40:280, :].squeeze(1) #TODO: Check whether the removed padding affects the gradient in any way
         else: 
-            depthmap = depthmap_original
+            logits = depthmap_original
         
         # Apply sigmoid and renormalisation the values so the predicted depths fall within the per-dataset min and max values.
-        renormalized_depthmap = torch.sigmoid(logits) * (self.hparams.max_z - self.hparams.min_z) + self.hparams.min_z
-
+        # Temporary fix while I use checkpoints
+        #renormalized_depthmap = torch.sigmoid(logits) * (self.hparams.max_z - self.hparams.min_z) + self.hparams.min_z
+        #renormalized_depthmap = torch.sigmoid(logits) * (7.0 - 0.1953997164964676) + 0.1953997164964676
+        renormalized_depthmap = logits
         point_cloud = depthmap_to_gridspace(renormalized_depthmap)
         voxel_occupancy = self.voxelize(point_cloud)
         logits_depth = self.ifnet(voxel_occupancy, point_cloud)
@@ -200,9 +202,12 @@ def train_scene_net(args):
         # 2. overwrite entries in the existing state dict
         model.load_state_dict(pretrained_dict, strict=False)
     
-    trainer = Trainer(gpus=args.gpu , num_sanity_val_steps=args.sanity_steps, checkpoint_callback=checkpoint_callback, max_epochs=args.max_epoch, limit_val_batches=args.val_check_percent,
-                      val_check_interval=min(args.val_check_interval, 0.5), check_val_every_n_epoch=max(1, args.val_check_interval), 
-                      resume_from_checkpoint=args.resume, logger=tb_logger, benchmark=True, profiler=args.profiler, precision=args.precision)#, log_gpu_memory='all')
+    trainer = Trainer(
+        gpus=args.gpu , num_sanity_val_steps=args.sanity_steps, checkpoint_callback=checkpoint_callback, max_epochs=args.max_epoch, 
+        limit_val_batches=args.val_check_percent, val_check_interval=min(args.val_check_interval, 0.5), 
+        check_val_every_n_epoch=max(1, args.val_check_interval), resume_from_checkpoint=args.resume, logger=tb_logger, benchmark=True, 
+        profiler=args.profiler, precision=args.precision
+        )#, log_gpu_memory='all')
     #trainer.test(model)
     #model.hparams = args
     print(model.parameters())

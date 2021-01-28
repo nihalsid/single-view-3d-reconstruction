@@ -12,7 +12,7 @@ def parse_arguments():
     parser.add_argument('--resume', type=str, default=None, help='resume checkpoint')
     parser.add_argument('--splitsdir', type=str, default='overfit', help='resume checkpoint')
     parser.add_argument('--datasetdir', type=str, help='datasetdir', default='data')
-    parser.add_argument('--val_check_percent', type=float, default=1.0, help='percentage of val checked')
+    parser.add_argument('--val_check_percent', type=float, default=0.3, help='percentage of val checked')
     parser.add_argument('--val_check_interval', type=float, default=1.0, help='check val every fraction of epoch')
     parser.add_argument('--max_epoch', type=int, default=100, help='number of epochs to train for')
     parser.add_argument('--save_epoch', type=int, default=1, help='save every nth epoch')
