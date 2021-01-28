@@ -59,9 +59,16 @@ def process_sample_pipeline(dataset_path, splitsdir):
                 for sigma in [0.01, 0.1]:
                     boundary_points, occupancies, grid_coords = sample_points(sample / "mesh.obj", dims, 100000, sigma)
                     np.savez(out / f"occupancy_{sigma:.02f}", points=boundary_points, occupancies=occupancies, grid_coords=grid_coords)
+            
+            # This catches meshes that are not of size dims (139, 104,112) and moves the view into another folder (quarantine)
             except IndexError:
                 quarantine = Path(dataset_path) / "quarantine" / splitsdir / scene / view
-                print("An exception occurred, moving file: ", sample, "to ", quarantine) 
+                print("An Index-Error exception occurred, moving file: ", sample, "to ", quarantine) 
+                move(sample, quarantine)
+            # This catches empty meshes that can't be sampled  and moves the view into another folder (quarantine)
+            except AttributeError:
+                quarantine = Path(dataset_path) / "quarantine" / splitsdir / scene / view
+                print("An Attribute-Error exception occurred, moving file: ", sample, "to ", quarantine) 
                 move(sample, quarantine)
             
 
@@ -95,4 +102,4 @@ def diffable_process_sample(dataset_path, splitsdir, sample_name):
 
 if __name__ == "__main__":
     path = "/media/alex/01D6C1999581FF10/Users/alexs/OneDrive/Desktop/3dfront_share/processed"
-    process_sample_pipeline(path, "train3")
+    process_sample_pipeline(path, "val2")

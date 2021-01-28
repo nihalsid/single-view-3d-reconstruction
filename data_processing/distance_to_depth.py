@@ -93,21 +93,14 @@ def generate_frustum(image_size, intrinsic_inv, depth_min, depth_max):
     frustum = torch.mm(intrinsic_inv, eight_points)
     frustum = frustum.transpose(1, 0)
     return frustum[:, :3]
-
-
-def coords_multiplication(A, B):
-    B = np.concatenate([np.transpose(B), np.ones((1, B.shape[0]))])
-    return np.transpose(np.dot(A, B))[:, :3]
-
+    
 
 def depth_to_camera(depth_map, f, cx, cy):
-    #if depth_map.size() ## TO-DO: enable batching and non-batching mode. Currently only supports batched inputs
     v, u = torch.meshgrid(torch.arange(depth_map.shape[-2], device=depth_map.device), torch.arange(depth_map.shape[-1], device=depth_map.device))
     X = ((torch.multiply(u, depth_map) - cx * depth_map) / f)
     Y = -((torch.multiply(v, depth_map) - cy * depth_map) / f)
     Z = depth_map
     return X.flatten(), Y.flatten(), Z.flatten()
-    #return X,Y,Z
 
 
 def generate_frustum_volume(frustum, voxelsize):
