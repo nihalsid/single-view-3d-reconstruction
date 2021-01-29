@@ -203,7 +203,7 @@ def train_scene_net(args):
         model.load_state_dict(pretrained_dict, strict=False)
     
     trainer = Trainer(
-        gpus=args.gpu , num_sanity_val_steps=args.sanity_steps, checkpoint_callback=checkpoint_callback, max_epochs=args.max_epoch, 
+        gpus=[args.gpu] , num_sanity_val_steps=args.sanity_steps, checkpoint_callback=checkpoint_callback, max_epochs=args.max_epoch, 
         limit_val_batches=args.val_check_percent, val_check_interval=min(args.val_check_interval, 0.5), 
         check_val_every_n_epoch=max(1, args.val_check_interval), resume_from_checkpoint=args.resume, logger=tb_logger, benchmark=True, 
         profiler=args.profiler, precision=args.precision
