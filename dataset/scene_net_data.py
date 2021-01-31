@@ -10,10 +10,6 @@ import torchvision.transforms.functional as F
 from data_processing.distance_to_depth import FromDistanceToDepth, get_intrinsic
 from data_processing.volume_reader import read_df
 
-# make datatype dependent on argparse
-#from util import arguments
-#_args = arguments.parse_arguments()
-
 class SquarePad:
 	def __call__(self, image):
 		w, h = image.size

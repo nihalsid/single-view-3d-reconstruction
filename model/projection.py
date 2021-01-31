@@ -1,12 +1,7 @@
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
-import numpy as np
-import pyexr
-from util.visualize import visualize_point_list, visualize_grid
-from data_processing.distance_to_depth import depth_to_gridspace
-from data_processing.distance_to_depth import depthmap_to_gridspace
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -24,9 +19,9 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 class diff_voxelize(nn.Module):
     "Diffefentiable point cloud projection module"
-    def __init__(self, kernel_size=3, sigma=0.01):
+    def __init__(self, dims, kernel_size=3, sigma=0.01):
         super(diff_voxelize, self).__init__()
-        self.vox_size = torch.tensor([139, 104, 112], device=device)
+        self.vox_size = dims.to(device)
         self.kernel_size = kernel_size
         self.sigma = torch.nn.Parameter(sigma)
         self.sigma.requires_grad = True
@@ -42,9 +37,8 @@ class diff_voxelize(nn.Module):
 
         # check borders
         valid = torch.all((points < 0.5  - eps) & (points > -0.5 + eps), axis=-1).view(-1)
-        
+    
         grid = (points + 0.5) * (self.vox_size - 1)
-        #grid = torch.unsqueeze(grid, 0) #if points are unbatched, add fake dimension for batches (testing purposes)
         grid_floor = grid.floor()
         
         grid_idxs = grid_floor.long()
@@ -102,11 +96,9 @@ class diff_voxelize(nn.Module):
             # add padding for kernel dimension
             padding = [0] * 3
             padding[np.argmax(k.shape) - 2] = max(k.shape) // 2
-            #k = k.double()
-            #voxels = voxels.double()
             voxels = F.conv3d(voxels, k.repeat(bs, 1, 1, 1, 1), stride=1, padding=padding, groups=bs)
 
-        voxels = voxels.squeeze(0)
+        voxels = voxels.clamp(0,1).squeeze(0)
         return voxels
 
     def voxel_occ_from_pc(self, point_cloud):
@@ -124,41 +116,6 @@ class diff_voxelize(nn.Module):
         point_cloud[:,:, 1] /= self.vox_size[1]
         point_cloud[:,:, 2] /= self.vox_size[2]
         return point_cloud
-
-    """def voxel_occ_from_depth(self.depth_map, sigma=0.01, kernel_size=3):
-        intrinsic_path = (Path("data") / "raw" / "overfit" / "00000" / "intrinsic.txt")
-        depth_grid_space = depth_to_gridspace(distance_map_path, intrinsic_path)
-        depth_grid_space = norm_grid_space(depth_grid_space)
-        voxelized_occupancy = pc_voxels(depth_grid_space, dims)
-        smoothed_voxelized_occupancy = voxels_smooth(voxelized_occupancy, kernels=self.smoothing_kernel()).unsqueeze(1)
-        return smoothed_voxelized_occupancy"""
-
-
-if __name__ == "__main__":
-    from pathlib import Path
-
-    distance_map_path = str(Path("data") / "raw" / "overfit" / "00000" / "distance.exr")
-    intrinsic_path = (Path("data") / "raw" / "overfit" / "00000" / "intrinsic.txt")
-    output_pt_cloud_path = Path("data") / "visualizations" / "overfit" / "00000" / "diff_depth.obj"
-    
-    depth_grid_space = depth_to_gridspace(distance_map_path, intrinsic_path) #in voxel values s (36 to 76)*0.05cm
-    visualize_point_list(depth_grid_space, output_pt_cloud_path)
-    
-    # visualize as voxels
-    output_voxel_path = Path("data") / "visualizations" / "overfit" / "00000" / "diff_depth_voxels.obj"
-    
-    #center & scale
-    depth_grid_space = norm_grid_space(depth_grid_space)
-
-    #differential voxelization
-    voxelize = diff_voxelize(kernel_size=3, sigma=0.01)
-    voxels = pc_voxels(depth_grid_space)
-    smooth = voxelize.voxels_smooth(voxels).squeeze(0)
-    visualize_grid(smooth, output_voxel_path)
-
-    # lets also visualize in occupancy space, which is just normalized grid space
-    output_pt_cloud_path = Path("data") / "visualizations" / "overfit" / "00000" / "diff_depth_occupied.obj"
-    visualize_point_list(depth_grid_space, output_pt_cloud_path)
 
 
 

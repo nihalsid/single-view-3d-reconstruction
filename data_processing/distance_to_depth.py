@@ -1,10 +1,7 @@
 import torch
-import math
 import pyexr
 from util.visualize import visualize_point_list, visualize_grid
 from pathlib import Path
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
 
 class FromDistanceToDepth:
 
@@ -40,8 +37,8 @@ def generate_frustum(image_size, intrinsic_inv, depth_min, depth_max):
                              [0 * depth_max, y * depth_max, depth_max, 1.0],
                              [x * depth_max, y * depth_max, depth_max, 1.0],
                              [x * depth_max, 0 * depth_max, depth_max, 1.0]]).transpose(1, 0)
-    frustum = torch.mm(intrinsic_inv, eight_points)
-    frustum = frustum.transpose(1, 0)
+    frustum = (torch.mm(intrinsic_inv, eight_points)).transpose(1, 0)
+    
     return frustum[:, :3]
     
 
@@ -67,74 +64,48 @@ def generate_frustum_volume(frustum, voxelsize):
     camera2frustum = torch.tensor([[1.0 / voxelsize, 0, 0, -minx],
                                [0, 1.0 / voxelsize, 0, -miny],
                                [0, 0, 1.0 / voxelsize, -minz],
-                               [0, 0, 0, 1.0]], device = device)
+                               [0, 0, 0, 1.0]])
 
     return (dimX, dimY, dimZ), camera2frustum
 
 
-def depth_to_gridspace(distance_map, intrinsic_path=None, read=True):
-    # read depth from path
-    if read:
-        # a matrix of (height x width x channels)
-        input_depth = pyexr.open(distance_map).get("R")[:, :, 0]
-    else:
-        input_depth = distance_map
-    # read intrinsics
-    if intrinsic_path is None:
-        intrinsic_path = (Path("data") / "raw" / "overfit" / "00000" / "intrinsic.txt")
+def depth_to_gridspace(distance_map, intrinsic_path=None):
+    input_depth = pyexr.open(distance_map).get("R")[:, :, 0]
 
-    intrinsic_line_0, intrinsic_line_1 = intrinsic_path.read_text().splitlines()[:2]
-    focal_length = float(intrinsic_line_0[2:].split(',')[0])
-    cx = float(intrinsic_line_0[2:-2].split(',')[2].strip())
-    cy = float(intrinsic_line_1[1:-2].split(',')[2].strip())
-    intrinsic = np.array([[focal_length, 0, cx, 0], [0, focal_length, cy, 0], [0, 0, 1, 0], [0, 0, 0, 1]])
-    
+    intrinsic = get_intrinsic(intrinsic_path)
+    focal_length = intrinsic[0][0]
 
     # distance map to depth map
     transform = FromDistanceToDepth(focal_length)
-    depth_image = transform(input_depth)
+    depthmap = transform(input_depth)
 
-    # Transforming depth map to grid space (in which the mesh resides)
+    return depthmap_to_gridspace(depthmap, intrinsic_path)
 
-    # depth to camera space
-    X, Y, Z = depth_to_camera(depth_image, focal_length, cx, cy)
-
-    # get camera space to grid space transform
-    intrinsic_inv = np.linalg.inv(intrinsic)
-    intrinsic_inv = torch.from_numpy(intrinsic).to(torch.float)
-    frustum = generate_frustum([320, 240], intrinsic_inv, 0.4, 6.0)
-    dims, camera2frustum = generate_frustum_volume(frustum, 0.05)
-
-    # depth from camera to grid space
-    coords = np.stack([X, Y, Z, np.ones_like(X)])
-    print(camera2frustum.shape, coords.shape)
-    
-    depth_in_gridspace = (camera2frustum @ coords)[:3, :].T
-    depth_in_gridspace = depth_in_gridspace.view(distance_map.shape[0], -1)
-    return depth_in_gridspace
-
-def depthmap_to_gridspace(depthmap):
-    intrinsic_path = (Path("data") / "raw" / "overfit" / "00000" / "intrinsic.txt")
+def depthmap_to_gridspace(depthmap, intrinsic_path=None):
+    device = depthmap.device
     intrinsic = get_intrinsic(intrinsic_path)
     focal_length, cx, cy = intrinsic[0][0], intrinsic[0][2], intrinsic[1][2]
-    bs = depthmap.shape[0]
-
+    
     # depth to camera space
+    bs = depthmap.shape[0] #batch_size
     X, Y, Z = depth_to_camera(depthmap, focal_length, cx, cy)
 
     # get camera space to grid space transform
     intrinsic_inv = torch.inverse(intrinsic)
     frustum = generate_frustum([320, 240], intrinsic_inv, 0.4, 6.0)
     dims, camera2frustum = generate_frustum_volume(frustum, 0.05)
+    camera2frustum = camera2frustum.to(device)
 
     # depth from camera to grid space
     coords = torch.stack([X, Y, Z, torch.ones_like(X)])
-    #print(camera2frustum.shape, coords.shape)
     depth_in_gridspace = (camera2frustum @ coords)[:3, :].transpose(1,0).reshape(bs, -1, 3)
 
     return depth_in_gridspace
 
-def get_intrinsic(intrinsic_path):
+def get_intrinsic(intrinsic_path=None):
+    if intrinsic_path is None:
+        intrinsic_path = (Path("data") / "raw" / "overfit" / "00000" / "intrinsic.txt")
+
     intrinsic_line_0, intrinsic_line_1 = intrinsic_path.read_text().splitlines()[:2]
     focal_length = float(intrinsic_line_0[2:].split(',')[0])
     cx = float(intrinsic_line_0[2:-2].split(',')[2].strip())
@@ -145,47 +116,15 @@ def get_intrinsic(intrinsic_path):
 
 if __name__ == "__main__":
     from pathlib import Path
-    device = torch.device("cpu")
-    #distance_map_path = str(Path("runs") / "24011635_fast_dev/vis/00003" / "val_0491_0_depthmap.exr")
-    depth_map_path = str("/home/alex/Documents/ifnet_scenes-main/ifnet_scenes/data/visualizations/overfit/00000/depth_map.exr")
 
-    intrinsics_matrix = get_intrinsic(Path("data") / "intrinsics.txt")
     output_pt_cloud_path = str("/home/alex/Documents/ifnet_scenes-main/ifnet_scenes/data/visualizations/overfit/00000/new_depthmap_to_pc.obj")
     focal_length = intrinsics_matrix[0][0]
-    #depth_grid_space = depth_to_gridspace(distance_map_path, intrinsic_path)
-    #distance_map = pyexr.open(str(distance_map_path)).get("R")[:, :, 0]
 
-    #transform = FromDistanceToDepth(focal_length)
-    #depth_map = transform(distance_map).numpy().astype('float32', casting='same_kind')
-    #
-
+    depth_map_path = str("/home/alex/Documents/ifnet_scenes-main/ifnet_scenes/data/visualizations/overfit/00000/depth_map.exr")
     depth_map = pyexr.open(str(depth_map_path)).get("Z")[:, :, 0]
     depth_map = torch.from_numpy(depth_map)
 
     pointcloud = depthmap_to_gridspace(depth_map)
     pointcloud = pointcloud.reshape(-1,3).squeeze()
 
-    #visualize_point_list(depth_grid_space, output_pt_cloud_path)
     visualize_point_list(pointcloud, output_pt_cloud_path)
-
-    dims = (139, 104, 112)
-    # visualize as voxels
-    #output_voxel_path = Path("data") / "visualizations" / "overfit" / "00000" / "depth_voxels.obj"
-    #grid = np.zeros(dims)
-    #to_int = lambda x: np.round(x).astype(np.int32)
-    #grid[to_int(depth_grid_space[:, 0]), to_int(depth_grid_space[:, 1]), to_int(depth_grid_space[:, 2])] = 1
-    #visualize_grid(grid, output_voxel_path)
-
-    # lets also visualize in occupancy space, which is just normalized grid space
-
-    # center
-    #depth_grid_space[:, 0] -= (dims[0] / 2)
-    #depth_grid_space[:, 1] -= (dims[1] / 2)
-    #depth_grid_space[:, 2] -= (dims[2] / 2)
-
-    # scale
-    #max_dim = np.array(dims).max()
-    #depth_grid_space /= max_dim
-
-    #output_pt_cloud_path = Path("data") / "visualizations" / "overfit" / "00000" / "depth_occupied.obj"
-    #visualize_point_list(depth_grid_space, output_pt_cloud_path)
