@@ -19,7 +19,10 @@ class ImplicitRefinementTrainer(pl.LightningModule):
         super(ImplicitRefinementTrainer, self).__init__()
         self.hparams = kwargs
         self.ifnet = IFNet()
+
         self.dims = np.array((139, 104, 112), dtype=np.float32)
+        self.dims = np.round(self.dims / self.hparams.down_scale_factor)
+
         self.dataset = lambda split: ImplicitDataset(split, self.hparams.datasetdir, self.hparams.num_points, self.hparams.splitsdir)
 
     def configure_optimizers(self):

@@ -15,7 +15,7 @@ class ImplicitDataset(Dataset):
         self.splitsdir = splitsdir
         self.split_shapes = [x.strip() for x in (Path("data/splits") / splitsdir / f"{split}.txt").read_text().split("\n") if x.strip() != ""]
         self.data = [x for x in self.split_shapes]
-        self.data = self.data * (240 if (splitsdir == 'overfit') and split == 'train' else 1)
+        self.data = self.data * (50 if ('overfit' in splitsdir) and split == 'train' else 1)
         self.num_points = num_points
 
     def __len__(self):
@@ -24,7 +24,7 @@ class ImplicitDataset(Dataset):
     def __getitem__(self, idx):
         item = self.data[idx]
         sample_folder = Path(self.dataset_path) / "processed" / self.splitsdir / item
-        sample_input = torch.from_numpy(np.load(sample_folder / "diffable_depth_grid.npz")['grid']).float()
+        sample_input = torch.from_numpy(np.load(sample_folder / "depth_grid.npz")['grid']).float()
         # sample_input = torch.nn.functional.interpolate(sample_input.unsqueeze(0).unsqueeze(0), scale_factor=1).squeeze()
         sample_target = torch.from_numpy(read_df(str(sample_folder / "target.df"))).float()
         # sample_target = torch.nn.functional.interpolate(sample_target.unsqueeze(0).unsqueeze(0), scale_factor=1).squeeze()
@@ -45,7 +45,6 @@ class ImplicitDataset(Dataset):
         sample_points = torch.from_numpy(np.array(points, dtype=np.float32))  # * (1 - 16 / 64))
         sample_occupancies = torch.from_numpy(np.array(occupancies, dtype=np.float32))
         sample_grid = torch.from_numpy(np.array(grids, dtype=np.float32))
-        sample_input = torch.from_numpy(np.load(sample_folder / "depth_grid.npz")['grid']).float()
 
         return {
             'name': item,

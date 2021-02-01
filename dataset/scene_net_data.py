@@ -28,7 +28,7 @@ class scene_net_data(Dataset):
         self.splitsdir = splitsdir
         self.split_shapes = [x.strip() for x in (Path("data/splits") / splitsdir / f"{split}.txt").read_text().split("\n") if x.strip() != ""]
         self.data = [x for x in self.split_shapes]
-        self.data = self.data * (500 if (splitsdir == 'overfit') and split == 'train' else 1)
+        self.data = self.data * (50 if ('overfit' in splitsdir) and split == 'train' else 1)
         self.num_points = num_points
         print(split, dataset_path, splitsdir)
         resize_transfrom = Compose([SquarePad(), Resize((kwargs.W, kwargs.W))])

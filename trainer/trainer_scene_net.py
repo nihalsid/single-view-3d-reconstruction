@@ -27,7 +27,10 @@ class SceneNetTrainer(pl.LightningModule):
         self.ifnet = IFNet()
         self.sigma = torch.tensor(self.hparams.sigma, requires_grad=True, device=self.device)
         self.kernel_size = self.hparams.kernel_size
+
         self.dims = torch.tensor([139, 104, 112], device=self.device)
+        self.dims = (self.dims / self.hparams.down_scale_factor).round().long()
+
         self.voxelize = diff_voxelize(self.dims, self.kernel_size, self.sigma)
         if self.hparams.resize_input:
             self.unet = Unet(channels_in=3, channels_out=1)

@@ -36,6 +36,7 @@ def parse_arguments():
     parser.add_argument('--min_z', type=float, default=0.1953997164964676, help='minimum depth value for the dataset. Used during normalization of predicted depth.')
     # The actual max depth is 24.600257873535156 but very few points exceed the value of 7, so 7 is used instead.
     parser.add_argument('--max_z', type=float, default=7.0, help='maximum depth value for the dataset. Used during normalization of predicted depth.')
+    parser.add_argument('--down_scale_factor' ,type=int, default=1, help='Down scale the voxel grid input.')
 
     args = parser.parse_args()
 
