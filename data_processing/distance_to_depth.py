@@ -69,7 +69,7 @@ def generate_frustum_volume(frustum, voxelsize):
     return (dimX, dimY, dimZ), camera2frustum
 
 
-def depth_to_gridspace(distance_map, intrinsic_path=None):
+def depth_to_gridspace(distance_map, intrinsic_path=None, down_scale_factor=1):
     input_depth = pyexr.open(distance_map).get("R")[:, :, 0]
 
     intrinsic = get_intrinsic(intrinsic_path)
@@ -79,9 +79,9 @@ def depth_to_gridspace(distance_map, intrinsic_path=None):
     transform = FromDistanceToDepth(focal_length)
     depthmap = transform(input_depth)
 
-    return depthmap_to_gridspace(depthmap, intrinsic_path)
+    return depthmap_to_gridspace(depthmap, intrinsic_path, down_scale_factor)
 
-def depthmap_to_gridspace(depthmap, intrinsic_path=None):
+def depthmap_to_gridspace(depthmap, intrinsic_path=None, down_scale_factor=1):
     device = depthmap.device
     intrinsic = get_intrinsic(intrinsic_path)
     focal_length, cx, cy = intrinsic[0][0], intrinsic[0][2], intrinsic[1][2]
@@ -93,7 +93,7 @@ def depthmap_to_gridspace(depthmap, intrinsic_path=None):
     # get camera space to grid space transform
     intrinsic_inv = torch.inverse(intrinsic)
     frustum = generate_frustum([320, 240], intrinsic_inv, 0.4, 6.0)
-    dims, camera2frustum = generate_frustum_volume(frustum, 0.05)
+    dims, camera2frustum = generate_frustum_volume(frustum, 0.05 * down_scale_factor)
     camera2frustum = camera2frustum.to(device)
 
     # depth from camera to grid space

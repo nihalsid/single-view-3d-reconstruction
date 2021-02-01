@@ -32,13 +32,24 @@ class BinaryReader(object):
         self.file.close()
 
 
-def read_df(filename):
+def read_df(filename, down_scale_factor=1):
     reader = BinaryReader(filename)
     dimX, dimY, dimZ = reader.read('UINT64', 3)
     df = reader.read('float', dimX*dimY*dimZ)
     df = np.array(df, dtype=np.float32).reshape([dimX, dimY, dimZ], order='F')
+    
+    if down_scale_factor != 1:
+        df = scale_down(df, down_scale_factor)
+
     return df
 
+# ONLY SCALES TO A FACTOR OF TWO FOR NOW
+# TODO: Implement scaling for factors other than 2
+def scale_down(df, down_scale_factor):
+    n_df = (df[:-1:2]+df[1::2])/2
+    n_df = (n_df[:,:-1:2]+n_df[:,1::2])/2
+    n_df = (n_df[:,:,:-1:2]+n_df[:,:,1::2])/2
+    return n_df
 
 def read_semantics(filename):
     reader = BinaryReader(filename)

@@ -7,20 +7,21 @@ from util.visualize import visualize_sdf
 from shutil import copyfile, move
 import os
 
-def process_sample(dataset_path, splitsdir, sample_name):
+def process_sample(dataset_path, splitsdir, sample_name, down_scale_factor=1):
     # convert depth to grid
-    dims = (139, 104, 112)
+    dims = (round(139 / down_scale_factor), round(104 / down_scale_factor), round(112 / down_scale_factor))
+
     sample = Path(dataset_path) / "raw" / splitsdir / sample_name
     out = Path(dataset_path) / "processed" / splitsdir / sample_name
     out.mkdir(exist_ok=True, parents=True)
 
-    depth_grid_space = depth_to_gridspace(str(sample / "distance.exr"), sample / "intrinsic.txt")
+    depth_grid_space = depth_to_gridspace(str(sample / "distance.exr"), sample / "intrinsic.txt", down_scale_factor)
     grid = np.zeros(dims)
-    to_int = lambda x: np.round(x).astype(np.int32)
+    to_int = lambda x: np.round(x.numpy()).astype(np.int32)
     grid[to_int(depth_grid_space[:, 0]), to_int(depth_grid_space[:, 1]), to_int(depth_grid_space[:, 2])] = 1
     np.savez_compressed(out / "depth_grid", grid=grid)
 
-    df = read_df(str(sample / "distance_field.df"))
+    df = read_df(str(sample / "distance_field.df"), down_scale_factor)
     visualize_sdf(df, sample / "mesh.obj", level=1.0)
     copyfile(str(sample / "distance_field.df"), out / "target.df")
 
@@ -28,9 +29,10 @@ def process_sample(dataset_path, splitsdir, sample_name):
         boundary_points, occupancies, grid_coords = sample_points(sample / "mesh.obj", dims, 100000, sigma)
         np.savez(out / f"occupancy_{sigma:.02f}", points=boundary_points, occupancies=occupancies, grid_coords=grid_coords)
 
-def process_sample_pipeline(dataset_path, splitsdir):
+def process_sample_pipeline(dataset_path, splitsdir, down_scale_factor=1):
     # convert depth to grid
-    dims = (139, 104, 112)
+    dims = (round(139 / down_scale_factor), round(104 / down_scale_factor), round(112 / down_scale_factor))
+
     d_path = Path(dataset_path) / splitsdir
     scenes = sorted(os.listdir(d_path))
     for scene in scenes:
@@ -43,14 +45,14 @@ def process_sample_pipeline(dataset_path, splitsdir):
                 out.mkdir(exist_ok=True, parents=True)
                 print("meshing file:", str(sample / "distance_field.df"))
                 
-                depth_grid_space = depth_to_gridspace(str(sample / "distance.exr"), Path(dataset_path) / "intrinsics.txt")
+                depth_grid_space = depth_to_gridspace(str(sample / "distance.exr"), Path(dataset_path) / "intrinsics.txt", down_scale_factor)
                 
                 grid = np.zeros(dims)
                 to_int = lambda x: np.round(x.numpy()).astype(np.int32)
                 grid[to_int(depth_grid_space[:, 0]), to_int(depth_grid_space[:, 1]), to_int(depth_grid_space[:, 2])] = 1
                 
                 np.savez_compressed(out / "depth_grid", grid=grid)
-                df = read_df(str(sample / "distance_field.df"))
+                df = read_df(str(sample / "distance_field.df"), down_scale_factor)
                 visualize_sdf(df, sample / "mesh.obj", level=1.0)
                 #copyfile(str(sample / "distance_field.df"), out / "target.df")
 
@@ -71,4 +73,4 @@ def process_sample_pipeline(dataset_path, splitsdir):
 
 if __name__ == "__main__":
     path = "/media/alex/01D6C1999581FF10/Users/alexs/OneDrive/Desktop/3dfront_share/processed"
-    process_sample_pipeline(path, "train")
+    process_sample_pipeline(path, "train", down_scale_factor=1)
