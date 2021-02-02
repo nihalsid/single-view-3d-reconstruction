@@ -89,10 +89,12 @@ class scene_net_data(Dataset):
         depth_map = transform(distance_map).numpy().astype('float32', casting='same_kind')
         #depth_map = np.flip(depth_map, 1)
         depth_flipped = depth_map.copy()
-        depthmap_target = self.target_transform(depth_flipped)    
+        depthmap_target = self.target_transform(depth_flipped)
+        mesh_path = str(sample_folder / "mesh.obj")
         
         return {
             'name': item,
+            'mesh':mesh_path,
             'rgb': rgb_img,
             'grid': sample_grid,
             'points': sample_points,

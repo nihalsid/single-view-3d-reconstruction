@@ -10,8 +10,8 @@ from util import arguments
 from util.visualize import visualize_sdf, visualize_point_list, visualize_depthmap, visualize_grid
 from dataset.scene_net_data import scene_net_data
 
-from model.projection import diff_voxelize
-from data_processing.distance_to_depth import depthmap_to_gridspace
+from model.projection import project
+from data_processing.mesh_occupancies import determine_occupancy
 
 from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import ModelCheckpoint
@@ -25,13 +25,12 @@ class SceneNetTrainer(pl.LightningModule):
         super(SceneNetTrainer, self).__init__()
         self.hparams = kwargs
         self.ifnet = IFNet()
-        self.sigma = torch.tensor(self.hparams.sigma, requires_grad=True, device=self.device)
         self.kernel_size = self.hparams.kernel_size
 
         self.dims = torch.tensor([139, 104, 112], device=self.device)
         self.dims = (self.dims / self.hparams.down_scale_factor).round().long()
 
-        self.voxelize = diff_voxelize(self.dims, self.kernel_size, self.sigma)
+        self.project = project(self.dims, self.kernel_size, torch.tensor(self.hparams.sigma))
         if self.hparams.resize_input:
             self.unet = Unet(channels_in=3, channels_out=1)
         else:
@@ -43,7 +42,7 @@ class SceneNetTrainer(pl.LightningModule):
     def configure_optimizers(self):
         opt_g = torch.optim.Adam([
             {'params': self.unet.parameters(), 'lr':self.hparams.lr},
-            {'params': self.voxelize.parameters(), 'lr':0},
+            {'params': self.project.parameters(), 'lr':10*self.hparams.lr},
             {'params': self.ifnet.parameters(), }
             ], lr=self.hparams.lr)
         return [opt_g], []
@@ -70,77 +69,69 @@ class SceneNetTrainer(pl.LightningModule):
             logits = depthmap_original
         
         # Apply sigmoid and renormalisation the values so the predicted depths fall within the per-dataset min and max values.
-        # Temporary fix while I use checkpoints
-        #renormalized_depthmap = torch.sigmoid(logits) * (self.hparams.max_z - self.hparams.min_z) + self.hparams.min_z
-        renormalized_depthmap = torch.sigmoid(logits) * (7.0 - 0.1953997164964676) + 0.1953997164964676
+        renormalized_depthmap = torch.sigmoid(logits) * (self.hparams.max_z - self.hparams.min_z) + self.hparams.min_z
 
-        point_cloud = depthmap_to_gridspace(renormalized_depthmap)
-        voxel_occupancy = self.voxelize(point_cloud)
+        # Forward outputs
+        point_cloud = self.project.depthmap_to_gridspace(renormalized_depthmap)
+        voxel_occupancy = self.project(point_cloud)
         logits_depth = self.ifnet(voxel_occupancy, point_cloud)
-        return logits_depth, renormalized_depthmap
+        return logits_depth, renormalized_depthmap, point_cloud
 
     def training_step(self, batch, batch_idx):
         #forward with additional training supervision
-        logits_depth, depthmap = self.forward(batch)
-        logits_mesh = self.ifnet(batch['input'], batch['points'])
-        occupancies_depth = torch.ones_like(logits_depth)
-
-        #losses
-        mse_loss = torch.nn.functional.mse_loss(depthmap, batch['depthmap_target'], reduction='mean')
-        ce_loss_mesh = torch.nn.functional.binary_cross_entropy_with_logits(logits_mesh, batch['occupancies'], reduction='mean')#.sum(-1).mean() / self.hparams.num_points  #batch avg --> point avg
-        ce_loss_depth = torch.nn.functional.binary_cross_entropy_with_logits(logits_depth, occupancies_depth, reduction='mean').sum(-1).mean() #/ (240*320)
-        loss = ce_loss_mesh + ce_loss_depth + mse_loss
+        logits_depth, depthmap, point_cloud = self.forward(batch)
         
-        self.log('loss', loss)
-        self.log('ce_loss_depth', ce_loss_depth)
-        self.log('ce_loss_mesh', ce_loss_mesh)
-        self.log('mse_depth_loss', mse_loss)
-        self.log('sigma', self.voxelize.sigma)
-
+        # additional supervision
+        logits_depth = logits_depth.flatten()
+        logits_mesh = self.ifnet(batch['input'], batch['points'])
+        _, occupancies_depth = determine_occupancy(batch['mesh'], point_cloud.cpu().detach().numpy())
+        occupancies_depth = occupancies_depth.to(logits_depth.device)
+        #alternative occupancy
+        #occupancies_depth = torch.ones_like(logits_depth)
+        
+        #losses and logging
+        loss = self.losses_and_logging(batch, depthmap, logits_mesh, logits_depth, occupancies_depth, 'train')
         return {'loss': loss}
     
     def validation_step(self, batch, batch_idx):
-        logits_depth, depthmap = self.forward(batch)
+        logits_depth, depthmap, point_cloud = self.forward(batch)
+        
+        # additional supervision
+        logits_depth = logits_depth.flatten()
         logits_mesh = self.ifnet(batch['input'], batch['points'])
-        occupancies_depth = torch.ones_like(logits_depth)
-
-        #losses
-        mse_loss = torch.nn.functional.mse_loss(depthmap, batch['depthmap_target'], reduction='mean')
-        ce_loss_mesh = torch.nn.functional.binary_cross_entropy_with_logits(logits_mesh, batch['occupancies'], reduction='mean')#.sum(-1).mean() / self.hparams.num_points  #batch avg --> point avg
-        ce_loss_depth = torch.nn.functional.binary_cross_entropy_with_logits(logits_depth, occupancies_depth, reduction='mean').sum(-1).mean()# / (240*320)
-        val_loss = ce_loss_mesh + ce_loss_depth + mse_loss
+        _, occupancies_depth = determine_occupancy(batch['mesh'], point_cloud.cpu().detach().numpy())
+        occupancies_depth = occupancies_depth.to(logits_depth.device)
+        #alternative occupancy
+        #occupancies_depth = torch.ones_like(logits_depth)
         
-        self.log('val_ce_loss_depth', ce_loss_depth)
-        self.log('val_ce_loss_mesh', ce_loss_mesh)
-        self.log('val_mse_depth_loss', mse_loss)
-        self.log('val_loss', val_loss)
-
-        #only visualize on argument
         if self.hparams.visualize:
-            for i in range(len(batch['name'])):
-                #prepare item names
-                output_vis_path = Path("runs") / self.hparams.experiment / f"vis" / f'{(self.global_step // 100):05d}'
-                output_vis_path.mkdir(exist_ok=True, parents=True)
-                base_name = "_".join(batch["name"][i].split("/")[-3:])
-                
-                #prepare items
-                point_cloud = depthmap_to_gridspace(depthmap)
-                voxel_occupancy = self.voxelize(point_cloud)
-                #unnormalize pointcloud --> gridspace
-                point_cloud = (point_cloud[i]*self.dims).squeeze() + self.dims/2
-                
-                #visualize outputs of network stages (depthmap, pointcloud, mesh)
-                visualize_point_list(point_cloud, output_vis_path / f"{base_name}_pc.obj")
-                visualize_grid(voxel_occupancy[i].squeeze().cpu().numpy(), output_vis_path / f"{base_name}_voxelized.obj")
-                implicit_to_mesh(self.ifnet, voxel_occupancy[i].unsqueeze(0), np.round(self.dims.cpu().detach().numpy()).astype(np.int32), 0.5, output_vis_path / f"{base_name}_predicted.obj")
-                visualize_sdf(batch['target'][i].squeeze().cpu().numpy(), output_vis_path / f"{base_name}_gt.obj", level=1)
-                visualize_depthmap(depthmap[i], output_vis_path / f"{base_name}_depthmap", flip = True)
-        
-        return {'val_loss': val_loss}
+            self.visualize_intermediates(batch, depthmap, point_cloud)
+
+        #losses and logging
+        loss = self.losses_and_logging(batch, depthmap, logits_mesh, logits_depth, occupancies_depth, 'val')
+        return {'val_loss': loss}
 
     def test_step(self, batch, batch_idx):
-        _, depthmap = self.forward(batch)
+        _, depthmap, point_cloud = self.forward(batch)
 
+        self.visualize_intermediates(batch, depthmap, point_cloud)
+
+        return {'loss': 0}
+    
+    def losses_and_logging(self, batch, depthmap, logits_mesh, logits_depth, occupancies_depth, mode):
+        mse_loss = torch.nn.functional.mse_loss(depthmap, batch['depthmap_target'], reduction='mean')
+        ce_loss_mesh = torch.nn.functional.binary_cross_entropy_with_logits(logits_mesh, batch['occupancies'], reduction='mean')#.sum(-1).mean() / self.hparams.num_points  #batch avg --> point avg
+        ce_loss_depth = torch.nn.functional.binary_cross_entropy_with_logits(logits_depth, occupancies_depth, reduction='mean')#.sum(-1).mean()# / (240*320)
+        loss = ce_loss_mesh + ce_loss_depth + mse_loss
+        
+        self.log('sigma', self.project.sigma)
+        self.log(f'{mode}_ce_loss_depth', ce_loss_depth)
+        self.log(f'{mode}_ce_loss_mesh', ce_loss_mesh)
+        self.log(f'{mode}_mse_depth_loss', mse_loss)
+        self.log(f'{mode}_loss', loss)
+        return loss
+
+    def visualize_intermediates(self, batch, depthmap, point_cloud):
         for i in range(len(batch['name'])):
             #prepare item names
             output_vis_path = Path("runs") / self.hparams.experiment / f"vis" / f'{(self.global_step // 100):05d}'
@@ -148,25 +139,22 @@ class SceneNetTrainer(pl.LightningModule):
             base_name = "_".join(batch["name"][i].split("/")[-3:])
             
             #prepare items
-            point_cloud = depthmap_to_gridspace(depthmap)
-            voxel_occupancy = self.voxelize(point_cloud)
-            #unnormalize pointcloud --> gridspace
-            point_cloud = (point_cloud[i]*self.dims).squeeze() + self.dims/2
+            voxel_occupancy = self.project(point_cloud)
             
             #visualize outputs of network stages (depthmap, pointcloud, mesh)
-            visualize_point_list(point_cloud, output_vis_path / f"{base_name}_pc.obj")
+            visualize_point_list(point_cloud[i].squeeze(), output_vis_path / f"{base_name}_pc.obj")
             visualize_grid(voxel_occupancy[i].squeeze().cpu().numpy(), output_vis_path / f"{base_name}_voxelized.obj")
             implicit_to_mesh(self.ifnet, voxel_occupancy[i].unsqueeze(0), np.round(self.dims.cpu().detach().numpy()).astype(np.int32), 0.5, output_vis_path / f"{base_name}_predicted.obj")
             visualize_sdf(batch['target'][i].squeeze().cpu().numpy(), output_vis_path / f"{base_name}_gt.obj", level=1)
             visualize_depthmap(depthmap[i], output_vis_path / f"{base_name}_depthmap", flip = True)
-        
-        return {'loss': 0}
+
     
     #uncomment to log gradients
     """
     def on_after_backward(self):
     # example to inspect gradient information in tensorboard
         if self.trainer.global_step % 25 == 0:  # don't make the tf file huge
+            print(self.project.sigma.grad)
             params = self.state_dict()
             for k, v in params.items():
                 grads = v
@@ -199,7 +187,7 @@ def train_scene_net(args):
         profiler=args.profiler, precision=args.precision
         )
     ## for testing specific models
-    #model = SceneNetTrainer.load_from_checkpoint('runs/30010522_fast_dev/checkpoints-v86.ckpt')
+    #model = SceneNetTrainer.load_from_checkpoint('/home/alex/Documents/ifnet_scenes-main/ifnet_scenes/runs/02020244_fast_dev/checkpoints-v43.ckpt')
     #trainer.test(model)
 
     trainer.fit(model)

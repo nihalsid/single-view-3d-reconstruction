@@ -150,3 +150,8 @@ data/splits/full
 /trainer_unet.py
 /losses.png
 /trainer_command.txt
+/Digraph.gv.pdf
+/backwards
+/backwards.png
+/backwards.png.png
+/overiew.txt
