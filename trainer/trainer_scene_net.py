@@ -28,7 +28,7 @@ class SceneNetTrainer(pl.LightningModule):
         self.kernel_size = self.hparams.kernel_size
 
         self.dims = torch.tensor([139, 104, 112], device=self.device)
-        self.dims = (self.dims / self.hparams.down_scale_factor).round().long()
+        self.dims = (self.dims / self.hparams.scale_factor).round().long()
 
         self.project = project(self.dims, self.kernel_size, torch.tensor(self.hparams.sigma))
         if self.hparams.resize_input:
@@ -72,7 +72,7 @@ class SceneNetTrainer(pl.LightningModule):
         renormalized_depthmap = torch.sigmoid(logits) * (self.hparams.max_z - self.hparams.min_z) + self.hparams.min_z
 
         # Forward outputs
-        point_cloud = self.project.depthmap_to_gridspace(renormalized_depthmap)
+        point_cloud = self.project.depthmap_to_gridspace(renormalized_depthmap, self.hparams.scale_factor)
         voxel_occupancy = self.project(point_cloud)
         logits_depth = self.ifnet(voxel_occupancy, point_cloud)
         return logits_depth, renormalized_depthmap, point_cloud

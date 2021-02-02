@@ -145,14 +145,14 @@ class project(nn.Module):
 
         return point_cloud
 
-    def depthmap_to_gridspace(self, depthmap):
+    def depthmap_to_gridspace(self, depthmap, scale_factor=1):
         focal_length, cx, cy = self.intrinsic[0][0], self.intrinsic[0][2], self.intrinsic[1][2]
         bs = depthmap.shape[0] #batch_size
 
         X, Y, Z = self.depth_to_camera(depthmap, focal_length, cx, cy)
         self.intrinsic_inv = torch.inverse(self.intrinsic)
         frustum = self.generate_frustum([320, 240], self.intrinsic_inv, 0.4, 6.0)
-        dims, camera2frustum = self.generate_frustum_volume(frustum, 0.05)
+        dims, camera2frustum = self.generate_frustum_volume(frustum, 0.05 * scale_factor)
 
         # depth from camera to grid space
         coords = torch.stack([X, Y, Z, torch.ones_like(X)])
