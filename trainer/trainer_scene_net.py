@@ -71,11 +71,15 @@ class SceneNetTrainer(pl.LightningModule):
         # Apply sigmoid and renormalisation the values so the predicted depths fall within the per-dataset min and max values.
         renormalized_depthmap = torch.sigmoid(logits) * (self.hparams.max_z - self.hparams.min_z) + self.hparams.min_z
 
-        # Forward outputs
+        # Forward outputs, ifnet wants points in normed gridspace (-0.5, 0.5)
         point_cloud = self.project.depthmap_to_gridspace(renormalized_depthmap, self.hparams.scale_factor)
+        point_cloud = self.project.norm_grid_space(point_cloud)
+        
+        # Diff voxelized occupancy from point_cloud -> ifnet -> logits
         voxel_occupancy = self.project(point_cloud)
         points = torch.cat((point_cloud, batch['points']), axis=1)
         logits_depth = self.ifnet(voxel_occupancy, points)
+        
         return logits_depth, renormalized_depthmap, point_cloud
 
     def training_step(self, batch, batch_idx):
@@ -88,7 +92,7 @@ class SceneNetTrainer(pl.LightningModule):
         #occupancies_depth = torch.ones_like(logits_depth)
         
         occupancies = torch.cat((occupancies_pointcloud, batch['occupancies']), axis=1)
-
+        
         #losses and logging
         loss = self.losses_and_logging(batch, depthmap, logits, occupancies, 'train')
         return {'loss': loss}
@@ -113,7 +117,6 @@ class SceneNetTrainer(pl.LightningModule):
 
     def test_step(self, batch, batch_idx):
         _, depthmap, point_cloud = self.forward(batch)
-
         self.visualize_intermediates(batch, depthmap, point_cloud)
 
         return {'loss': 0}
@@ -131,20 +134,23 @@ class SceneNetTrainer(pl.LightningModule):
         return loss
 
     def visualize_intermediates(self, batch, depthmap, point_cloud):
+        #prepare items
+        voxel_occupancy = self.project(point_cloud)
+        #bring point_cloud back from normed space to mesh space for visualization
+        point_cloud = self.project.un_norm_grid_space(point_cloud)
+        
         for i in range(len(batch['name'])):
             #prepare item names
             output_vis_path = Path("runs") / self.hparams.experiment / f"vis" / f'{(self.global_step // 100):05d}'
             output_vis_path.mkdir(exist_ok=True, parents=True)
-            base_name = "_".join(batch["name"][i].split("/")[-3:])
+            base_name = "_".join(batch["name"][i].split("/")[-3:])   
             
-            #prepare items
-            voxel_occupancy = self.project(point_cloud)
-            
-            #visualize outputs of network stages (depthmap, pointcloud, mesh)
+            #visualize outputs of network stages (depthmap, voxelgrid, pointcloud, mesh)
             visualize_point_list(point_cloud[i].squeeze(), output_vis_path / f"{base_name}_pc.obj")
             visualize_grid(voxel_occupancy[i].squeeze().cpu().numpy(), output_vis_path / f"{base_name}_voxelized.obj")
             implicit_to_mesh(self.ifnet, voxel_occupancy[i].unsqueeze(0), np.round(self.dims.cpu().detach().numpy()).astype(np.int32), 0.5, output_vis_path / f"{base_name}_predicted.obj")
-            visualize_sdf(batch['target'][i].squeeze().cpu().numpy(), output_vis_path / f"{base_name}_gt.obj", level=1)
+            
+            #visualize_sdf(batch['target'][i].squeeze().cpu().numpy(), output_vis_path / f"{base_name}_gt.obj", level=1)
             visualize_depthmap(depthmap[i], output_vis_path / f"{base_name}_depthmap", flip = True)
 
     
@@ -186,7 +192,7 @@ def train_scene_net(args):
         profiler=args.profiler, precision=args.precision
         )
     ## for testing specific models
-    #model = SceneNetTrainer.load_from_checkpoint('/home/alex/Documents/ifnet_scenes-main/ifnet_scenes/runs/02020244_fast_dev/checkpoints-v43.ckpt')
+    #model = SceneNetTrainer.load_from_checkpoint('/home/alex/Documents/ifnet_scenes-main/ifnet_scenes/runs/03021417_fast_dev/checkpoints-v23.ckpt')
     #trainer.test(model)
 
     trainer.fit(model)

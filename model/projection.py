@@ -37,15 +37,15 @@ class project(nn.Module):
         return voxel_occupancy
 
     def pc_voxels(self, points, eps=1e-6):
-        bs = torch.tensor(points.size(0), device = points.device) #batch size
+        bs = points.size(0) #batch size
         n = points.size(1) #number of points
 
         # check borders
         valid = torch.all((points < 0.5  - eps) & (points > -0.5 + eps), axis=-1).view(-1)
-    
+        
         grid = (points + 0.5) * (self.vox_size - 1)
         grid_floor = grid.floor()
-        
+         
         grid_idxs = grid_floor.long()
         batch_idxs = torch.arange(bs, device=device)[:, None, None].repeat(1, n, 1)
 
@@ -86,14 +86,10 @@ class project(nn.Module):
         kernel_1d = torch.exp(-x**2 / (2. * self.sigma**2))
         kernel_1d = kernel_1d / kernel_1d.sum()
 
-        k1 = kernel_1d.view(1, 1, 1, 1, -1) #view can cause issues with gradients
+        k1 = kernel_1d.view(1, 1, 1, 1, -1)
         k2 = kernel_1d.view(1, 1, 1, -1, 1)
         k3 = kernel_1d.view(1, 1, -1, 1, 1)
-        #if x.requires_grad:
-        #    k1.retain_grad()
-        #    k2.retain_grad()
-        #    k3.retain_grad()
-
+        
         return [k1, k2, k3]
 
     def voxels_smooth(self, voxels, kernels):
@@ -110,38 +106,37 @@ class project(nn.Module):
             padding[np.argmax(k.shape) - 2] = max(k.shape) // 2
             voxels = F.conv3d(voxels, k.repeat(bs, 1, 1, 1, 1), stride=1, padding=padding, groups=bs)
 
-        voxels = voxels.clamp(0,1).squeeze(0)
+        voxels = voxels.squeeze(0).clamp(0,1)
         return voxels
 
     def voxel_occ_from_pc(self, point_cloud):
-        pc = self.norm_grid_space(point_cloud) #Sigma only 'learns' if this line is pc = self.norm_grid_space(point_cloud), but we don't want point_cloud to be transformed
-        voxelized_occupancy = self.pc_voxels(pc)
-        smoothed_voxelized_occupancy = self.voxels_smooth(voxelized_occupancy, kernels=self.smoothing_kernel()).unsqueeze(1)
-        return smoothed_voxelized_occupancy
+        voxelized_occupancy = self.pc_voxels(point_cloud)
+        smoothed_voxelized_occupancy = self.voxels_smooth(voxelized_occupancy, kernels=self.smoothing_kernel())
+        return smoothed_voxelized_occupancy.unsqueeze(1)
 
-    def norm_grid_space(self, point_cloud):
-        #cloning breaks the gradient for voxelize
-        pc = point_cloud.clone()
-        if point_cloud.requires_grad:
-            pc.retain_grad()
+    def norm_grid_space(self, pc):
         # center & scale point_cloud values between -0.5 & 0.5#
-        pc[:,:, 0] -= (self.vox_size[0] / 2)
-        pc[:,:, 1] -= (self.vox_size[1] / 2)
-        pc[:,:, 2] -= (self.vox_size[2] / 2)
-        pc[:,:, 0] /= self.vox_size[0]
-        pc[:,:, 1] /= self.vox_size[1]
-        pc[:,:, 2] /= self.vox_size[2]
+        pc[:,:, 0] = pc[:,:, 0] - (self.vox_size[0] / 2)
+        pc[:,:, 1] = pc[:,:, 1] - (self.vox_size[1] / 2)
+        pc[:,:, 2] = pc[:,:, 2] - (self.vox_size[2] / 2)
+        pc[:,:, 0] = pc[:,:, 0] / self.vox_size[0]
+        pc[:,:, 1] = pc[:,:, 1] / self.vox_size[1]
+        pc[:,:, 2] = pc[:,:, 2] / self.vox_size[2]
         return pc
 
     def un_norm_grid_space(self, point_cloud):
-        # center & scale point_cloud values between -0.5 & 0.5
-        point_cloud[:,:, 0] *= self.vox_size[0]
-        point_cloud[:,:, 1] *= self.vox_size[1]
-        point_cloud[:,:, 2] *= self.vox_size[2]
+        #inplace operations (pc[:,0] += 1) do not create copys but access the tensor in memory directly. Loses gradients
+        #use pc[:,0] = pc[:,0] + 1 instead to create a temporary copy & allow gradient prop. 
+        # See https://pytorch.org/tutorials/beginner/former_torchies/tensor_tutorial.html and https://discuss.pytorch.org/t/what-is-in-place-operation/16244/15
+        
+        # Bring values back to gridspace ([0,0,0] - dims)
+        point_cloud[:,:, 0] = point_cloud[:,:, 0] * self.vox_size[0]
+        point_cloud[:,:, 1] = point_cloud[:,:, 1] * self.vox_size[1]
+        point_cloud[:,:, 2] = point_cloud[:,:, 2] * self.vox_size[2]
 
-        point_cloud[:,:, 0] += (self.vox_size[0] / 2)
-        point_cloud[:,:, 1] += (self.vox_size[1] / 2)
-        point_cloud[:,:, 2] += (self.vox_size[2] / 2)
+        point_cloud[:,:, 0] = point_cloud[:,:, 0] + (self.vox_size[0] / 2)
+        point_cloud[:,:, 1] = point_cloud[:,:, 1] + (self.vox_size[1] / 2)
+        point_cloud[:,:, 2] = point_cloud[:,:, 2] + (self.vox_size[2] / 2)
 
         return point_cloud
 

@@ -53,13 +53,11 @@ class scene_net_data(Dataset):
     def __getitem__(self, idx):
         item = self.data[idx]
         sample_folder = Path(self.dataset_path) / "raw" / self.splitsdir / item
-        df_foler = Path(self.dataset_path) / "processed" / self.splitsdir / item
+        
         
         image = Image.open(sample_folder / "rgb.png")
         #image = image.transpose(Image.FLIP_LEFT_RIGHT)
         rgb_img = self.input_transform(image)
-
-        # sample_target = torch.from_numpy(read_df(str(df_foler / "distance_field.df"))).float().unsqueeze(0)
 
         points = []
         occupancies = []
@@ -75,8 +73,8 @@ class scene_net_data(Dataset):
             grids.extend(boundary_sample_coords[subsample_indices])
             occupancies.extend(boundary_sample_occupancies[subsample_indices])
 
-        sample_points = torch.from_numpy(np.array(points, dtype=np.float32))  # * (1 - 16 / 64))
-        sample_occupancies = torch.from_numpy(np.array(occupancies, dtype=np.float32))
+        sample_points = torch.from_numpy(np.array(points, dtype=f'float{self.kwargs.precision}'))  # * (1 - 16 / 64))
+        sample_occupancies = torch.from_numpy(np.array(occupancies, dtype=f'float{self.kwargs.precision}'))
 
         distance_map = pyexr.open(str(sample_folder / "distance.exr")).get("R")[:, :, 0]
 
@@ -84,11 +82,15 @@ class scene_net_data(Dataset):
         intrinsics_matrix = get_intrinsic(Path("data/intrinsics.txt"))
         focal_length = intrinsics_matrix[0][0]
         transform = FromDistanceToDepth(focal_length)
-        depth_map = transform(distance_map).numpy().astype('float32', casting='same_kind')
+        depth_map = transform(distance_map).numpy().astype(f'float{self.kwargs.precision}', casting='same_kind')
         #depth_map = np.flip(depth_map, 1)
         depth_flipped = depth_map.copy()
         depthmap_target = self.target_transform(depth_flipped)
         mesh_path = str(sample_folder / "mesh.obj")
+        
+        # GT mesh
+        #df_foler = Path(self.dataset_path) / "processed" / self.splitsdir / item
+        #sample_target = torch.from_numpy(read_df(str(df_foler / "distance_field.df")).astype(f'float{self.kwargs.precision}')).unsqueeze(0)
         
         return {
             'name': item,
@@ -96,6 +98,6 @@ class scene_net_data(Dataset):
             'rgb': rgb_img,
             'points': sample_points,
             'occupancies': sample_occupancies,
-            # 'target': sample_target.unsqueeze(0),
+            #'target': sample_target.unsqueeze(0),
             'depthmap_target': depthmap_target.squeeze()
         }
