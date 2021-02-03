@@ -31,7 +31,7 @@ def determine_occupancy(mesh_path, points, dims=(139, 104, 112)):
     points[:,:, 2] = (dims[2])
 
     #please vectorize
-    occs = []
+    occs = np.zeros((len(mesh_path), points.shape[1]))
     for i, path in enumerate(mesh_path): 
 
         mesh = trimesh.load(path)
@@ -46,7 +46,7 @@ def determine_occupancy(mesh_path, points, dims=(139, 104, 112)):
 
         #determine occupancy of points
         occupancies = iw.implicit_waterproofing(mesh, points[i])[0]
-        occs.extend(occupancies)
+        occs[i] = occupancies
     #return points, occupancies, grid_coords
     occs = torch.from_numpy(np.array(occs))
     occs = occs.to(torch.float)

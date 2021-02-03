@@ -74,41 +74,41 @@ class SceneNetTrainer(pl.LightningModule):
         # Forward outputs
         point_cloud = self.project.depthmap_to_gridspace(renormalized_depthmap, self.hparams.scale_factor)
         voxel_occupancy = self.project(point_cloud)
-        logits_depth = self.ifnet(voxel_occupancy, point_cloud)
+        points = torch.cat((point_cloud, batch['points']), axis=1)
+        logits_depth = self.ifnet(voxel_occupancy, points)
         return logits_depth, renormalized_depthmap, point_cloud
 
     def training_step(self, batch, batch_idx):
         #forward with additional training supervision
-        logits_depth, depthmap, point_cloud = self.forward(batch)
-        
+        logits, depthmap, point_cloud = self.forward(batch)
         # additional supervision
-        logits_depth = logits_depth.flatten()
-        logits_mesh = self.ifnet(batch['input'], batch['points'])
-        _, occupancies_depth = determine_occupancy(batch['mesh'], point_cloud.cpu().detach().numpy())
-        occupancies_depth = occupancies_depth.to(logits_depth.device)
+        _, occupancies_pointcloud = determine_occupancy(batch['mesh'], point_cloud.cpu().detach().numpy())
+        occupancies_pointcloud = occupancies_pointcloud.to(logits.device)
         #alternative occupancy
         #occupancies_depth = torch.ones_like(logits_depth)
         
+        occupancies = torch.cat((occupancies_pointcloud, batch['occupancies']), axis=1)
+
         #losses and logging
-        loss = self.losses_and_logging(batch, depthmap, logits_mesh, logits_depth, occupancies_depth, 'train')
+        loss = self.losses_and_logging(batch, depthmap, logits, occupancies, 'train')
         return {'loss': loss}
     
     def validation_step(self, batch, batch_idx):
-        logits_depth, depthmap, point_cloud = self.forward(batch)
+        logits, depthmap, point_cloud = self.forward(batch)
         
         # additional supervision
-        logits_depth = logits_depth.flatten()
-        logits_mesh = self.ifnet(batch['input'], batch['points'])
-        _, occupancies_depth = determine_occupancy(batch['mesh'], point_cloud.cpu().detach().numpy())
-        occupancies_depth = occupancies_depth.to(logits_depth.device)
+        _, occupancies_pointcloud = determine_occupancy(batch['mesh'], point_cloud.cpu().detach().numpy())
+        occupancies_pointcloud = occupancies_pointcloud.to(logits.device)
         #alternative occupancy
         #occupancies_depth = torch.ones_like(logits_depth)
         
+        occupancies = torch.cat((occupancies_pointcloud, batch['occupancies']), axis=1)
+
         if self.hparams.visualize:
             self.visualize_intermediates(batch, depthmap, point_cloud)
 
         #losses and logging
-        loss = self.losses_and_logging(batch, depthmap, logits_mesh, logits_depth, occupancies_depth, 'val')
+        loss = self.losses_and_logging(batch, depthmap, logits, occupancies, 'val')
         return {'val_loss': loss}
 
     def test_step(self, batch, batch_idx):
@@ -118,15 +118,14 @@ class SceneNetTrainer(pl.LightningModule):
 
         return {'loss': 0}
     
-    def losses_and_logging(self, batch, depthmap, logits_mesh, logits_depth, occupancies_depth, mode):
+    def losses_and_logging(self, batch, depthmap, logits, occupancies, mode):
         mse_loss = torch.nn.functional.mse_loss(depthmap, batch['depthmap_target'], reduction='mean')
-        ce_loss_mesh = torch.nn.functional.binary_cross_entropy_with_logits(logits_mesh, batch['occupancies'], reduction='mean')#.sum(-1).mean() / self.hparams.num_points  #batch avg --> point avg
-        ce_loss_depth = torch.nn.functional.binary_cross_entropy_with_logits(logits_depth, occupancies_depth, reduction='mean')#.sum(-1).mean()# / (240*320)
-        loss = ce_loss_mesh + ce_loss_depth + mse_loss
+
+        ce_loss = torch.nn.functional.binary_cross_entropy_with_logits(logits, occupancies, reduction='mean')#.sum(-1).mean() / self.hparams.num_points  #batch avg --> point avg
+        loss = ce_loss + mse_loss
         
         self.log('sigma', self.project.sigma)
-        self.log(f'{mode}_ce_loss_depth', ce_loss_depth)
-        self.log(f'{mode}_ce_loss_mesh', ce_loss_mesh)
+        self.log(f'{mode}_ce_loss', ce_loss)
         self.log(f'{mode}_mse_depth_loss', mse_loss)
         self.log(f'{mode}_loss', loss)
         return loss
