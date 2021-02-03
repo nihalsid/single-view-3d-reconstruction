@@ -59,7 +59,7 @@ class scene_net_data(Dataset):
         #image = image.transpose(Image.FLIP_LEFT_RIGHT)
         rgb_img = self.input_transform(image)
 
-        sample_target = torch.from_numpy(read_df(str(df_foler / "distance_field.df"))).float().unsqueeze(0)
+        # sample_target = torch.from_numpy(read_df(str(df_foler / "distance_field.df"))).float().unsqueeze(0)
 
         points = []
         occupancies = []
@@ -77,8 +77,6 @@ class scene_net_data(Dataset):
 
         sample_points = torch.from_numpy(np.array(points, dtype=np.float32))  # * (1 - 16 / 64))
         sample_occupancies = torch.from_numpy(np.array(occupancies, dtype=np.float32))
-        sample_grid = torch.from_numpy(np.array(grids, dtype=np.float32))
-        sample_input = torch.from_numpy(np.load(df_foler / "depth_grid.npz")['grid']).float()
 
         distance_map = pyexr.open(str(sample_folder / "distance.exr")).get("R")[:, :, 0]
 
@@ -96,10 +94,8 @@ class scene_net_data(Dataset):
             'name': item,
             'mesh':mesh_path,
             'rgb': rgb_img,
-            'grid': sample_grid,
             'points': sample_points,
-            'input': sample_input.unsqueeze(0),
             'occupancies': sample_occupancies,
-            'target': sample_target.unsqueeze(0),
+            # 'target': sample_target.unsqueeze(0),
             'depthmap_target': depthmap_target.squeeze()
         }
