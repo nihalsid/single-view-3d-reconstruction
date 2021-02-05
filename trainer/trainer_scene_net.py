@@ -77,7 +77,13 @@ class SceneNetTrainer(pl.LightningModule):
         
         # Diff voxelized occupancy from point_cloud -> ifnet -> logits
         voxel_occupancy = self.project(point_cloud)
-        points = torch.cat((point_cloud, batch['points']), axis=1)
+        
+       # Whether to use sampled points only or image points as well
+        if self.hparams.sampled_points_only:
+            points = batch['points']
+        else:
+            points = torch.cat((point_cloud, batch['points']), axis=1)
+
         logits_depth = self.ifnet(voxel_occupancy, points)
         
         return logits_depth, renormalized_depthmap, point_cloud
@@ -86,13 +92,17 @@ class SceneNetTrainer(pl.LightningModule):
         #forward with additional training supervision
         logits, depthmap, point_cloud = self.forward(batch)
         # additional supervision
-        _, occupancies_pointcloud = determine_occupancy(batch['mesh'], point_cloud.cpu().detach().numpy())
-        occupancies_pointcloud = occupancies_pointcloud.to(logits.device)
-        #alternative occupancy
-        #occupancies_depth = torch.ones_like(logits_depth)
-        
-        occupancies = torch.cat((occupancies_pointcloud, batch['occupancies']), axis=1)
-        
+
+        # Whether to use sampled points only or image points as well
+        if self.hparams.sampled_points_only:
+            occupancies = batch['occupancies']     
+        else:
+            #alternative occupancy
+            #occupancies_depth = torch.ones_like(logits_depth)
+            _, occupancies_pointcloud = determine_occupancy(batch['mesh'], point_cloud.cpu().detach().numpy())
+            occupancies_pointcloud = occupancies_pointcloud.to(logits.device)
+            occupancies = torch.cat((occupancies_pointcloud, batch['occupancies']), axis=1)
+           
         #losses and logging
         loss = self.losses_and_logging(batch, depthmap, logits, occupancies, 'train')
         return {'loss': loss}
@@ -100,17 +110,16 @@ class SceneNetTrainer(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         logits, depthmap, point_cloud = self.forward(batch)
         
-        # additional supervision
-        _, occupancies_pointcloud = determine_occupancy(batch['mesh'], point_cloud.cpu().detach().numpy())
-        occupancies_pointcloud = occupancies_pointcloud.to(logits.device)
-        #alternative occupancy
-        #occupancies_depth = torch.ones_like(logits_depth)
-        
-        occupancies = torch.cat((occupancies_pointcloud, batch['occupancies']), axis=1)
-
-        if self.hparams.visualize:
-            self.visualize_intermediates(batch, depthmap, point_cloud)
-
+        # Whether to use sampled points only or image points as well
+        if self.hparams.sampled_points_only:
+            occupancies = batch['occupancies']     
+        else:
+            #alternative occupancy
+            #occupancies_depth = torch.ones_like(logits_depth)
+            _, occupancies_pointcloud = determine_occupancy(batch['mesh'], point_cloud.cpu().detach().numpy())
+            occupancies_pointcloud = occupancies_pointcloud.to(logits.device)
+            occupancies = torch.cat((occupancies_pointcloud, batch['occupancies']), axis=1)
+           
         #losses and logging
         loss = self.losses_and_logging(batch, depthmap, logits, occupancies, 'val')
         return {'val_loss': loss}

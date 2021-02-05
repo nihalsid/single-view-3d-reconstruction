@@ -21,7 +21,7 @@ def parse_arguments():
     parser.add_argument('--experiment', type=str, default='fast_dev', help='experiment directory')
     parser.add_argument('--seed', type=int, default=-1, help='random seed')
     parser.add_argument("--W", type=int, default=256)
-    parser.add_argument("--sigma", type=float, default=0.01, help='point_extent')
+    parser.add_argument("--sigma", type=float, default=1.5, help='point_extent')
     parser.add_argument("--kernel_size", type=int, default=3, help='kernel size for voxelization')
 
     parser.add_argument('--num_points', type=int, default=2048)
@@ -37,6 +37,7 @@ def parse_arguments():
     # The actual max depth is 24.600257873535156 but very few points exceed the value of 7, so 7 is used instead.
     parser.add_argument('--max_z', type=float, default=7.0, help='maximum depth value for the dataset. Used during normalization of predicted depth.')
     parser.add_argument('--scale_factor' ,type=int, default=1, help='Down scale the voxel grid input.')
+    parser.add_argument('--sampled_points_only', dest='sampled_points_only', action='store_true', help='Train and validate only using sampled points and not image points.')
 
     args = parser.parse_args()
 
