@@ -53,7 +53,7 @@ class scene_net_data(Dataset):
     def __getitem__(self, idx):
         item = self.data[idx]
         sample_folder = Path(self.dataset_path) / "raw" / self.splitsdir / item
-        
+        df_folder = Path(self.dataset_path) / "processed" / self.splitsdir / item
         
         image = Image.open(sample_folder / "rgb.png")
         #image = image.transpose(Image.FLIP_LEFT_RIGHT)
@@ -64,7 +64,7 @@ class scene_net_data(Dataset):
         grids = []
 
         for sigma in ['0.10', '0.01']:
-            sample_points_occ_npz = np.load(df_foler / f"occupancy_{sigma}.npz")
+            sample_points_occ_npz = np.load(df_folder / f"occupancy_{sigma}.npz")
             boundary_sample_points = sample_points_occ_npz['points']
             boundary_sample_coords = sample_points_occ_npz['grid_coords']
             boundary_sample_occupancies = sample_points_occ_npz['occupancies']
@@ -89,8 +89,8 @@ class scene_net_data(Dataset):
         mesh_path = str(sample_folder / "mesh.obj")
         
         # GT mesh
-        #df_foler = Path(self.dataset_path) / "processed" / self.splitsdir / item
-        #sample_target = torch.from_numpy(read_df(str(df_foler / "distance_field.df")).astype(f'float{self.kwargs.precision}')).unsqueeze(0)
+        #df_folder = Path(self.dataset_path) / "processed" / self.splitsdir / item
+        #sample_target = torch.from_numpy(read_df(str(df_folder / "distance_field.df")).astype(f'float{self.kwargs.precision}')).unsqueeze(0)
         
         return {
             'name': item,
