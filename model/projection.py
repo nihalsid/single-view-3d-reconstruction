@@ -20,7 +20,7 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 class project(nn.Module):
     #Module: Projection from Depthmap to Pointcloud & Differentiable voxelization of point cloud
-    def __init__(self, dims, kernel_size=3, sigma=0.01):
+    def __init__(self, dims, kernel_size, sigma):
         super(project, self).__init__()
         self.kernel_size = kernel_size
         self.sigma = torch.nn.Parameter(sigma)
@@ -82,13 +82,21 @@ class project(nn.Module):
 
     def smoothing_kernel(self):
         #"Generate 3 separate gaussian kernels with `sigma` stddev"
-        x = torch.arange(-self.kernel_size//2 + 1., self.kernel_size//2 + 1., device=device)
-        kernel_1d = torch.exp(-x**2 / (2. * self.sigma**2))
-        kernel_1d = kernel_1d / kernel_1d.sum()
+        x = torch.arange(-self.kernel_size[0]//2 + 1., self.kernel_size[0]//2 + 1., device=device)
+        kernel_1d_x = torch.exp(-x**2 / (2. * self.sigma[0]**2))
+        kernel_1d_x = kernel_1d_x / kernel_1d_x.sum()
 
-        k1 = kernel_1d.view(1, 1, 1, 1, -1)
-        k2 = kernel_1d.view(1, 1, 1, -1, 1)
-        k3 = kernel_1d.view(1, 1, -1, 1, 1)
+        y = torch.arange(-self.kernel_size[1]//2 + 1., self.kernel_size[1]//2 + 1., device=device)
+        kernel_1d_y = torch.exp(-y**2 / (2. * self.sigma[1]**2))
+        kernel_1d_y = kernel_1d_y / kernel_1d_y.sum()
+
+        z = torch.arange(-self.kernel_size[2]//2 + 1., self.kernel_size[2]//2 + 1., device=device)
+        kernel_1d_z = torch.exp(-z**2 / (2. * self.sigma[2]**2))
+        kernel_1d_z = kernel_1d_z / kernel_1d_z.sum()
+
+        k1 = kernel_1d_x.view(1, 1, 1, 1, -1)
+        k2 = kernel_1d_y.view(1, 1, 1, -1, 1)
+        k3 = kernel_1d_z.view(1, 1, -1, 1, 1)
         
         return [k1, k2, k3]
 

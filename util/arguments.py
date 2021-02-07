@@ -21,8 +21,8 @@ def parse_arguments():
     parser.add_argument('--experiment', type=str, default='fast_dev', help='experiment directory')
     parser.add_argument('--seed', type=int, default=-1, help='random seed')
     parser.add_argument("--W", type=int, default=256)
-    parser.add_argument("--sigma", type=float, default=1.5, help='point_extent')
-    parser.add_argument("--kernel_size", type=int, default=3, help='kernel size for voxelization')
+    parser.add_argument("--sigma", nargs='+', type=float, default=[1.5], help='point_extent')
+    parser.add_argument("--kernel_size", nargs='+', type=int, default=[11, 9, 9], help='kernel size for voxelization')
 
     parser.add_argument('--num_points', type=int, default=2048)
     parser.add_argument('--net_res', type=int, default=128, help='Architecture of the Network and number of features')
@@ -40,6 +40,12 @@ def parse_arguments():
     parser.add_argument('--sampled_points_only', dest='sampled_points_only', action='store_true', help='Train and validate only using sampled points and not image points.')
 
     args = parser.parse_args()
+
+    if len(args.kernel_size) == 1:
+        args.kernel_size = args.kernel_size * 3
+
+    if len(args.sigma) == 1:
+        args.sigma = args.sigma * 3
 
     if args.seed == -1:
         args.seed = randint(0, 999)

@@ -136,7 +136,9 @@ class SceneNetTrainer(pl.LightningModule):
         ce_loss = torch.nn.functional.binary_cross_entropy_with_logits(logits, occupancies, reduction='mean')#.sum(-1).mean() / self.hparams.num_points  #batch avg --> point avg
         loss = ce_loss + mse_loss
         
-        self.log('sigma', self.project.sigma)
+        self.log('sigma_x', self.project.sigma[0])
+        self.log('sigma_y', self.project.sigma[1])
+        self.log('sigma_z', self.project.sigma[2])
         self.log(f'{mode}_ce_loss', ce_loss)
         self.log(f'{mode}_mse_depth_loss', mse_loss)
         self.log(f'{mode}_loss', loss)
