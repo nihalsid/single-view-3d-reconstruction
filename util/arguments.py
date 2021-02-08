@@ -12,8 +12,8 @@ def parse_arguments():
     parser.add_argument('--resume', type=str, default=None, help='resume checkpoint')
     parser.add_argument('--splitsdir', type=str, default='overfit', help='resume checkpoint')
     parser.add_argument('--datasetdir', type=str, help='datasetdir', default='data')
-    parser.add_argument('--val_check_percent', type=float, default=0.4, help='percentage of val checked')
-    parser.add_argument('--val_check_interval', type=float, default=0.2, help='check val every fraction of epoch')
+    parser.add_argument('--val_check_percent', type=float, default=0.5, help='percentage of val checked')
+    parser.add_argument('--val_check_interval', type=float, default=0.25, help='check val every fraction of epoch')
     parser.add_argument('--max_epoch', type=int, default=100, help='number of epochs to train for')
     parser.add_argument('--save_epoch', type=int, default=1, help='save every nth epoch')
     parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
@@ -37,7 +37,10 @@ def parse_arguments():
     # The actual max depth is 24.600257873535156 but very few points exceed the value of 7, so 7 is used instead.
     parser.add_argument('--max_z', type=float, default=7.0, help='maximum depth value for the dataset. Used during normalization of predicted depth.')
     parser.add_argument('--scale_factor' ,type=int, default=1, help='Down scale the voxel grid input.')
-    parser.add_argument('--sampled_points_only', dest='sampled_points_only', action='store_true', help='Train and validate only using sampled points and not image points.')
+    parser.add_argument('--subsample_points', type=int, default=0, help='Use n points from projected pointclouds instead of all')
+    parser.add_argument('--skip_unet', dest='skip_unet', action='store_true', help='Skips Unet and uses GT depth instead')
+    
+    
 
     args = parser.parse_args()
 

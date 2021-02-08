@@ -8,7 +8,7 @@ import torch
 
 
 def to_point_list(s):
-    return np.concatenate([c[:, np.newaxis] for c in np.where(s == 1)], axis=1)
+    return np.concatenate([c[:, np.newaxis] for c in np.where(s >= 0.5)], axis=1)
 
 
 def visualize_point_list(grid, output_path):

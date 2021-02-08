@@ -36,6 +36,9 @@ class SceneNetTrainer(pl.LightningModule):
         else:
             self.unet = UNetMini(channels_in=3, channels_out=1)
 
+        if self.hparams.skip_unet:
+            self.unet = None
+
         self.dataset = lambda split: scene_net_data(split, self.hparams.datasetdir, self.hparams.num_points, self.hparams.splitsdir, self.hparams)
 
     #Here you could set different learning rates for different layers
@@ -44,6 +47,10 @@ class SceneNetTrainer(pl.LightningModule):
             {'params': self.unet.parameters(), 'lr':self.hparams.lr},
             {'params': self.project.parameters(), 'lr':10*self.hparams.lr},
             {'params': self.ifnet.parameters(), }
+            ], lr=self.hparams.lr)
+        if self.hparams.skip_unet:
+            opt_g = torch.optim.Adam([            
+            {'params': self.project.parameters(), 'lr':10*self.hparams.lr}, {'params': self.ifnet.parameters(), } 
             ], lr=self.hparams.lr)
         return [opt_g], []
     
@@ -56,30 +63,37 @@ class SceneNetTrainer(pl.LightningModule):
         return torch.utils.data.DataLoader(dataset, batch_size=self.hparams.batch_size, shuffle=False, num_workers=self.hparams.num_workers, drop_last=False)
 
     def test_dataloader(self):
-        dataset = self.dataset('val')
+        dataset = self.dataset('test')
         return torch.utils.data.DataLoader(dataset, batch_size=self.hparams.batch_size, shuffle=False, num_workers=self.hparams.num_workers, drop_last=False)
     
     def forward(self, batch):
-        depthmap_original = self.unet(batch['rgb'])
-        # Resize back and remove extra zero padding if input was resized
-        if self.hparams.resize_input:
-            resized_depthmap = interpolate(depthmap_original, size= 320, mode='bilinear')
-            logits = resized_depthmap[:, :, 40:280, :].squeeze(1) #TODO: Check whether the removed padding affects the gradient in any way
-        else: 
-            logits = depthmap_original
-        
-        # Apply sigmoid and renormalisation the values so the predicted depths fall within the per-dataset min and max values.
-        renormalized_depthmap = torch.sigmoid(logits) * (self.hparams.max_z - self.hparams.min_z) + self.hparams.min_z
+        if not self.hparams.skip_unet:
+            depthmap_original = self.unet(batch['rgb'])
+            # Resize back and remove extra zero padding if input was resized
+            if self.hparams.resize_input:
+                resized_depthmap = interpolate(depthmap_original, size= 320, mode='bilinear')
+                logits = resized_depthmap[:, :, 40:280, :].squeeze(1) #TODO: Check whether the removed padding affects the gradient in any way
+            else: 
+                logits = depthmap_original
+            
+            # Apply sigmoid and renormalisation the values so the predicted depths fall within the per-dataset min and max values.
+            renormalized_depthmap = torch.sigmoid(logits) * (self.hparams.max_z - self.hparams.min_z) + self.hparams.min_z
+        else:
+            renormalized_depthmap = batch['depthmap_target']
 
         # Forward outputs, ifnet wants points in normed gridspace (-0.5, 0.5)
         point_cloud = self.project.depthmap_to_gridspace(renormalized_depthmap, self.hparams.scale_factor)
         point_cloud = self.project.norm_grid_space(point_cloud)
-        
         # Diff voxelized occupancy from point_cloud -> ifnet -> logits
         voxel_occupancy = self.project(point_cloud)
-        
-       # Whether to use sampled points only or image points as well
-        if self.hparams.sampled_points_only:
+
+        #use subset of projected pointcloud
+        if self.hparams.subsample_points < (240*320) & self.hparams.subsample_points > 0: 
+            indices = torch.randperm(len(point_cloud[0])).to(dtype=torch.long)
+            indices = indices[:self.hparams.subsample_points]
+            point_cloud = point_cloud[:,indices,:].contiguous() #select n random points per batch
+            points = torch.cat((point_cloud, batch['points']), axis=1)
+        elif self.hparams.subsample_points == 0:
             points = batch['points']
         else:
             points = torch.cat((point_cloud, batch['points']), axis=1)
@@ -92,17 +106,13 @@ class SceneNetTrainer(pl.LightningModule):
         #forward with additional training supervision
         logits, depthmap, point_cloud = self.forward(batch)
         # additional supervision
-
-        # Whether to use sampled points only or image points as well
-        if self.hparams.sampled_points_only:
-            occupancies = batch['occupancies']     
+        if self.hparams.subsample_points == 0:
+            occupancies = batch['occupancies']
         else:
-            #alternative occupancy
-            #occupancies_depth = torch.ones_like(logits_depth)
             _, occupancies_pointcloud = determine_occupancy(batch['mesh'], point_cloud.cpu().detach().numpy())
-            occupancies_pointcloud = occupancies_pointcloud.to(logits.device)
+            occupancies_pointcloud = occupancies_pointcloud.to(logits.device)     
             occupancies = torch.cat((occupancies_pointcloud, batch['occupancies']), axis=1)
-           
+        
         #losses and logging
         loss = self.losses_and_logging(batch, depthmap, logits, occupancies, 'train')
         return {'loss': loss}
@@ -110,16 +120,17 @@ class SceneNetTrainer(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         logits, depthmap, point_cloud = self.forward(batch)
         
-        # Whether to use sampled points only or image points as well
-        if self.hparams.sampled_points_only:
-            occupancies = batch['occupancies']     
+        # additional supervision
+        if self.hparams.subsample_points == 0:
+            occupancies = batch['occupancies']
         else:
-            #alternative occupancy
-            #occupancies_depth = torch.ones_like(logits_depth)
             _, occupancies_pointcloud = determine_occupancy(batch['mesh'], point_cloud.cpu().detach().numpy())
-            occupancies_pointcloud = occupancies_pointcloud.to(logits.device)
+            occupancies_pointcloud = occupancies_pointcloud.to(logits.device)     
             occupancies = torch.cat((occupancies_pointcloud, batch['occupancies']), axis=1)
-           
+
+        if self.hparams.visualize:
+            self.visualize_intermediates(batch, depthmap, point_cloud)
+
         #losses and logging
         loss = self.losses_and_logging(batch, depthmap, logits, occupancies, 'val')
         return {'val_loss': loss}
@@ -131,14 +142,21 @@ class SceneNetTrainer(pl.LightningModule):
         return {'loss': 0}
     
     def losses_and_logging(self, batch, depthmap, logits, occupancies, mode):
-        mse_loss = torch.nn.functional.mse_loss(depthmap, batch['depthmap_target'], reduction='mean')
 
-        ce_loss = torch.nn.functional.binary_cross_entropy_with_logits(logits, occupancies, reduction='mean')#.sum(-1).mean() / self.hparams.num_points  #batch avg --> point avg
+        ce_loss = torch.nn.functional.binary_cross_entropy_with_logits(logits, occupancies, reduction='mean')
+        mse_loss = torch.nn.functional.mse_loss(depthmap, batch['depthmap_target'], reduction='mean')
         loss = ce_loss + mse_loss
+
+        mesh_ce_loss = ce_loss
+        if self.hparams.subsample_points > 0:
+            logits_mesh, occ_mesh = logits[:,self.hparams.subsample_points:].contiguous(), occupancies[:,self.hparams.subsample_points:].contiguous()
+            mesh_ce_loss = torch.nn.functional.binary_cross_entropy_with_logits(logits_mesh, occ_mesh, reduction='mean')     
+        
         
         self.log('sigma_x', self.project.sigma[0])
         self.log('sigma_y', self.project.sigma[1])
         self.log('sigma_z', self.project.sigma[2])
+        self.log(f'{mode}_mesh_ce_loss', mesh_ce_loss)
         self.log(f'{mode}_ce_loss', ce_loss)
         self.log(f'{mode}_mse_depth_loss', mse_loss)
         self.log(f'{mode}_loss', loss)
@@ -157,9 +175,9 @@ class SceneNetTrainer(pl.LightningModule):
             base_name = "_".join(batch["name"][i].split("/")[-3:])   
             
             #visualize outputs of network stages (depthmap, voxelgrid, pointcloud, mesh)
-            visualize_point_list(point_cloud[i].squeeze(), output_vis_path / f"{base_name}_pc.obj")
+            #visualize_point_list(point_cloud[i].squeeze(), output_vis_path / f"{base_name}_pc.obj")
             visualize_grid(voxel_occupancy[i].squeeze().cpu().numpy(), output_vis_path / f"{base_name}_voxelized.obj")
-            implicit_to_mesh(self.ifnet, voxel_occupancy[i].unsqueeze(0), np.round(self.dims.cpu().detach().numpy()).astype(np.int32), 0.5, output_vis_path / f"{base_name}_predicted.obj")
+            implicit_to_mesh(self.ifnet, voxel_occupancy[i].unsqueeze(0), self.dims.cpu().detach().numpy().astype(np.int32), 0.5, output_vis_path / f"{base_name}_predicted.obj", res_increase=self.hparams.inf_res)
             
             #visualize_sdf(batch['target'][i].squeeze().cpu().numpy(), output_vis_path / f"{base_name}_gt.obj", level=1)
             visualize_depthmap(depthmap[i], output_vis_path / f"{base_name}_depthmap", flip = True)
@@ -181,7 +199,7 @@ class SceneNetTrainer(pl.LightningModule):
 
 def train_scene_net(args):
     seed_everything(args.seed)
-    checkpoint_callback = ModelCheckpoint(filepath=os.path.join("runs", args.experiment, 'checkpoints'), save_top_k=-1, monitor='val_loss',verbose=False, period=args.save_epoch)
+    checkpoint_callback = ModelCheckpoint(filepath=os.path.join("runs", args.experiment, 'checkpoints'), save_top_k=2, save_last=True, monitor='val_loss', verbose=False, period=args.save_epoch)
     tb_logger = pl_loggers.TensorBoardLogger(save_dir=os.path.join("runs", 'logs/'), name='scene_net')
     if args.resume is None and args.pretrain_unet is None:
         model = SceneNetTrainer(args)
@@ -203,7 +221,11 @@ def train_scene_net(args):
         profiler=args.profiler, precision=args.precision
         )
     ## for testing specific models
-    #model = SceneNetTrainer.load_from_checkpoint('/home/alex/Documents/ifnet_scenes-main/ifnet_scenes/runs/03021417_fast_dev/checkpoints-v23.ckpt')
+    #model = SceneNetTrainer.load_from_checkpoint('runs/07020135_fast_dev/last.ckpt')
+    #model = SceneNetTrainer.load_from_checkpoint('runs/07021700_fast_dev/checkpoints.ckpt')
+    #model.hparams.inf_res = args.inf_res
+    #model.hparams.scale_factor = 2
+    #model.hparams.skip_unet = True
     #trainer.test(model)
 
     trainer.fit(model)

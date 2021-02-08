@@ -1,0 +1,19 @@
+#		prec	meshpoints	dataset		Ks	U								sigma	Learnable		BS	LR			Pointcloud-pts	GPU-Mem.		scale_factr			Time start / end			RunDir										Mesh quality
+301 	16  	4K 				mini			11	skip/res						3.0		Yes			32	10^-3		0						6.8Gb				2							23:45 / 00:10				runs/06022345_fast_dev/			Ok
+316	16  	4K 				mini			11	skip/res						3.0		Yes			6		10^-3		2k					7.25Gb				2							00:17 / 00:49				runs/07020015_fast_dev/			None
+323	16  	4K 				mini			11	Resize+Pretrain				3.0		Yes			6		10^-3		2k					7.745Gb			2							00:55 / 1:19				runs/07020053_fast_dev/			None
+338	32  	4K 				mini			11	skip/res						3.0		Yes			8		10^-3		0						7.035Gb			1							1:36 / 2:01				runs/07020135_fast_dev/			Very good
+390	32  	4K 				mini			11	skip/mini						3.0		Yes			16	10^-3		0						6.15Gb				2							16:43 / 17:00				runs/07021643_fast_dev/			Good
+391	32  	4K 				mini			11	skip/mini						3.0		Yes			20	4*10^-4		0						7.28Gb				2							17:01 / 17:15				runs/07021700_fast_dev/			Good
+343	32  	4K 				mini			11	skip								3.0		Yes			2		10^-3		2k					7.183Gb				1						2:03	/ 02:25				runs/07020202_fast_dev/			Good
+345	32  	4K 				mini			11	Resize+Fresh				3.0		Yes			2		10^-3		2k					7.577Gb				1						2:30 / 02:56				runs/07020229_fast_dev/			Floor only (poor)
+351	32  	4K 				FULL		11	Resize+Fresh				3.0		Yes			2		10^-3		2k					7.543Gb			1							3:18 / 3:50				runs/07020303_fast_dev/			Poor
+353	32  	4K 				FULL		11	Resize+Fresh				3.0		Yes			2		10^-4		2k					7.577Gb 			1							4:08 / 13:54				runs/07020357_fast_dev/			Ok --> resume(407, 408 & 412)
+361	32  	4K 				mini			11	Resize+Fresh				3.0		Yes			16	10^-3		0						7.431Gb 			2							14:17 / 15:20				runs/07021417_fast_dev/			Very Poor
+363	32  	4K 				mini			11	Resize+Pretrain				3.0		Yes			16	10^-3		0						7.431Gb 			2							15:22 / 15:46				runs/07021522_fast_dev/			Poor
+
+396	32  	4K 				mini			3		Resize+Pretrain				3.0		Yes			16	4*10^-4		0						7.477Gb 			2							17:22 / 17:40				runs/07021722_fast_dev/			Ok
+401	32  	4K 				mini			3		Resize+Pretrain				0.1		Yes			16	4*10^-4		0						7.477Gb 			2							17:53 / 18:29				runs/07021752_fast_dev/			Poor
+404	32  	4K 				mini			3		Resize+Pretrain				1.0		Yes			2		4*10^-4		10k					6.595Gb 			2							18:30 / 19:25				runs/07021825_fast_dev/			Poor
+
+425	32  	4.5K 			FULL		3		Resize+Pretrain				1.0		Yes			7		2*10^-4		0						7.351Gb 			1							14:04 / -					runs/08021401_fast_dev/			

@@ -156,3 +156,5 @@ data/splits/full
 /backwards.png.png
 /overiew.txt
 /sampled_points.obj
+*.obj
+/results/
