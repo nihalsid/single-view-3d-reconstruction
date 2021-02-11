@@ -121,56 +121,49 @@ def distance_p2p(pointcloud_pred, pointcloud_gt,
 if __name__ == "__main__":
     from pathlib import Path
     import glob
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description='Split Data'
+    )
+
+    parser.add_argument('--path_files', type=str, default='results/path_files')    
+    parser.add_argument('--experiment', type=str, default='425_results.txt')
+    parser.add_argument('--verbose', dest='verbose', action='store_true', help='verbose')
+    
+    args = parser.parse_args()
+    
     #prepare mesh_pathes to read and evaluate
     results_pth = Path("results")
-    gt_pth = Path("/media/alex/01D6C1999581FF10/Users/alexs/OneDrive/Desktop/3dfront_share/processed")
-    paths_predicted_big_e2e = sorted(glob.glob(str(results_pth/ "exp_endtoend" / "val_**_predicted.obj")))
-    paths_predicted_big_skipunet = sorted(glob.glob(str(results_pth/ "exp_skipunet" / "val_**_predicted.obj")))
-    paths_predicted_best = sorted(glob.glob(str(results_pth/ "best_pretrained_big" / "val_**_predicted.obj")))
-    
-    val_split_big = Path("data") / "splits" / "full_data"/ "test.txt"
-    val_split_mini2 = Path("data") / "splits" / "mini"/ "test.txt"
-    val_split_mini = Path("data") / "splits" / "mini"/ "test_2scale.txt"
-            
-    with open(str(val_split_big), 'r') as file:
-        paths_big_gt = sorted(file.read().splitlines())
-        for i, line in enumerate(paths_big_gt):
-            paths_big_gt[i] = line + "/mesh.obj"
+    path_files = Path(args.path_files)
 
-    with open(str(val_split_mini), 'r') as file:
-        paths_mini_gt = file.read().splitlines()
-        for i, line in enumerate(paths_mini_gt):
-            paths_mini_gt[i] = line + "/mesh.obj"
+    gt_path = path_files / "normed_gt.txt"
+    predicted_path = path_files / args.experiment
 
-    with open(str(Path("results")/"mini_results_ordered.txt"),'r') as file:
-        paths_predicted_mini = file.read().splitlines()
-    
-    #print(paths_predicted_mini[:11], paths_mini_gt[:11])
-    #evaluation here
-       
+    with open(str(predicted_path),'r') as file:
+        paths_predicted = file.read().splitlines()
+
+    with open(str(gt_path),'r') as file:
+        paths_gt = file.read().splitlines()
+
+    #define variables
+    experiment_name = "exp_" + args.experiment
+    experiment_results = paths_predicted
+    gt_path = paths_gt
+
+    ###evaluation here  
     #define dict
     performance = {'completeness': [], 'accuracy': [],'normals completeness': [],'normals accuracy': [], 'normals': [], 'completeness2': [], 'accuracy2': [], 'chamfer_l2': [], 'iou': []}
-    
-    #define variables // argparse this & paths & size
-    experiment_name = "exp_mini.txt"
-    experiment_results = paths_predicted_mini
-    gt_path = paths_mini_gt
-    verbose = True
-    size = np.array([139,104,112])
-    size = np.round(size / 2)
-    #print(paths_mini_gt, paths_predicted_mini)
-    if verbose:
-        print(size)
-    
+        
     #evaluate meshes
     for i in range(len(experiment_results)):
         #read meshes
-        if verbose:
-            print('reading mesh: '+str(i)+'/'+str(len(experiment_results)))
+        if args.verbose:
+            print('reading mesh: '+str(i)+'/'+str(len(experiment_results))+' with names:'+experiment_results[i]+' '+gt_path[i])
 
         pred_mesh = trimesh.load(str(experiment_results[i]))
         gt_mesh = trimesh.load(str(gt_path[i]))
-        out_dict = eval_mesh(pred_mesh, gt_mesh, 0, size, n_points=100000)
+        out_dict = eval_mesh(pred_mesh, gt_mesh, -0.5, 0.5, n_points=100000)
 
         for key in performance.keys():
             performance[key].append(out_dict[key])
