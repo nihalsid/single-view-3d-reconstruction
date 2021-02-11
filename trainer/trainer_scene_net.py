@@ -115,6 +115,7 @@ class SceneNetTrainer(pl.LightningModule):
         
         #losses and logging
         loss = self.losses_and_logging(batch, depthmap, logits, occupancies, 'train')
+        
         return {'loss': loss}
     
     def validation_step(self, batch, batch_idx):
@@ -152,14 +153,18 @@ class SceneNetTrainer(pl.LightningModule):
             logits_mesh, occ_mesh = logits[:,self.hparams.subsample_points:].contiguous(), occupancies[:,self.hparams.subsample_points:].contiguous()
             mesh_ce_loss = torch.nn.functional.binary_cross_entropy_with_logits(logits_mesh, occ_mesh, reduction='mean')     
         
-        
-        self.log('sigma_x', self.project.sigma[0])
+        #grid in (z, y, x) orientation where z = viewing direction
+        self.log('sigma_x', self.project.sigma[2])
         self.log('sigma_y', self.project.sigma[1])
-        self.log('sigma_z', self.project.sigma[2])
+        self.log('sigma_z', self.project.sigma[0])
         self.log(f'{mode}_mesh_ce_loss', mesh_ce_loss)
         self.log(f'{mode}_ce_loss', ce_loss)
         self.log(f'{mode}_mse_depth_loss', mse_loss)
         self.log(f'{mode}_loss', loss)
+
+        if self.hparams.no_depth_sup:
+            return ce_loss
+
         return loss
 
     def visualize_intermediates(self, batch, depthmap, point_cloud):
@@ -194,25 +199,29 @@ class SceneNetTrainer(pl.LightningModule):
                 grads = v
                 name = k
                 self.logger.experiment.add_histogram(tag=name, values=grads, global_step=self.trainer.global_step)"""
-    
-    
+
+
+def use_pretrained_unet(args):
+    model = SceneNetTrainer(args)
+    pretrained_dict = torch.load(args.pretrain_unet)['state_dict']
+    model_dict = model.state_dict()
+    # 1. filter out unnecessary keys & leave only unet keys
+    pretrained_dict = {k: v for k, v in pretrained_dict.items() if ('unet' in k)} 
+    # 2. overwrite entries in the existing state dict
+    model.load_state_dict(pretrained_dict, strict=False)
+    return model    
+
 
 def train_scene_net(args):
     seed_everything(args.seed)
-    checkpoint_callback = ModelCheckpoint(filepath=os.path.join("runs", args.experiment, 'checkpoints'), save_top_k=2, save_last=True, monitor='val_loss', verbose=False, period=args.save_epoch)
-    tb_logger = pl_loggers.TensorBoardLogger(save_dir=os.path.join("runs", 'logs/'), name='scene_net')
+    checkpoint_callback = ModelCheckpoint(filepath=os.path.join("runs", args.experiment, 'checkpoints'), save_top_k=2, save_last=True, monitor='val_ce_loss', verbose=False, period=args.save_epoch)
+    tb_logger = pl_loggers.TensorBoardLogger(save_dir=os.path.join("runs", 'logs/'), name=args.experiment)
     if args.resume is None and args.pretrain_unet is None:
         model = SceneNetTrainer(args)
     elif args.resume is not None:
         model = SceneNetTrainer(args).load_from_checkpoint(args.resume)
     elif args.pretrain_unet is not None:
-        model = SceneNetTrainer(args)
-        pretrained_dict = torch.load(args.pretrain_unet)['state_dict']
-        model_dict = model.state_dict()
-        # 1. filter out unnecessary keys & leave only unet keys
-        pretrained_dict = {k: v for k, v in pretrained_dict.items() if ('unet' in k)} 
-        # 2. overwrite entries in the existing state dict
-        model.load_state_dict(pretrained_dict, strict=False)
+        model = use_pretrained_unet(args)
     
     trainer = Trainer(
         gpus=[args.gpu] , num_sanity_val_steps=args.sanity_steps, checkpoint_callback=checkpoint_callback, max_epochs=args.max_epoch, 
@@ -220,15 +229,17 @@ def train_scene_net(args):
         check_val_every_n_epoch=max(1, args.val_check_interval), resume_from_checkpoint=args.resume, logger=tb_logger, benchmark=True, 
         profiler=args.profiler, precision=args.precision
         )
-    ## for testing specific models
-    #model = SceneNetTrainer.load_from_checkpoint('runs/07020135_fast_dev/last.ckpt')
-    #model = SceneNetTrainer.load_from_checkpoint('runs/07021700_fast_dev/checkpoints.ckpt')
-    #model.hparams.inf_res = args.inf_res
-    #model.hparams.scale_factor = 2
-    #model.hparams.skip_unet = True
-    #trainer.test(model)
 
-    trainer.fit(model)
+    ## for testing specific models
+    if args.test is not None:
+        model = SceneNetTrainer.load_from_checkpoint(args.test)
+        #change specific model-hparams for testing
+        model.hparams.inf_res = args.inf_res #default 1
+        model.hparams.scale_factor = args.scale_factor #default 1
+        model.hparams.skip_unet = args.skip_unet #default False
+        trainer.test(model)
+    else:
+        trainer.fit(model)
 
 
 if __name__ == '__main__':

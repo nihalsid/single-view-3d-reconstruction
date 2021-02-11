@@ -18,11 +18,11 @@ def parse_arguments():
     parser.add_argument('--save_epoch', type=int, default=1, help='save every nth epoch')
     parser.add_argument('--lr', type=float, default=0.0001, help='learning rate')
     parser.add_argument('--batch_size', type=int, default=16, help='batch size')
-    parser.add_argument('--experiment', type=str, default='fast_dev', help='experiment directory')
+    parser.add_argument('--experiment', type=str, default='scenes_net', help='experiment directory')
     parser.add_argument('--seed', type=int, default=-1, help='random seed')
     parser.add_argument("--W", type=int, default=256)
     parser.add_argument("--sigma", nargs='+', type=float, default=[1.5], help='point_extent')
-    parser.add_argument("--kernel_size", nargs='+', type=int, default=[11, 9, 9], help='kernel size for voxelization')
+    parser.add_argument("--kernel_size", nargs='+', type=int, default=[3, 3, 3], help='kernel size for voxelization')
 
     parser.add_argument('--num_points', type=int, default=2048)
     parser.add_argument('--net_res', type=int, default=128, help='Architecture of the Network and number of features')
@@ -39,7 +39,8 @@ def parse_arguments():
     parser.add_argument('--scale_factor' ,type=int, default=1, help='Down scale the voxel grid input.')
     parser.add_argument('--subsample_points', type=int, default=0, help='Use n points from projected pointclouds instead of all')
     parser.add_argument('--skip_unet', dest='skip_unet', action='store_true', help='Skips Unet and uses GT depth instead')
-    
+    parser.add_argument('--no_depth_sup', dest='no_depth_sup', action='store_true', help='Disables depth supervision')
+    parser.add_argument('--test', type=str, default=None, help='load and test from model-checkpoint')
     
 
     args = parser.parse_args()
