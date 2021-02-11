@@ -64,7 +64,6 @@ class project(nn.Module):
             update = rr[pos[0]][..., 0] * rr[pos[1]][..., 1] * rr[pos[2]][..., 2]
             update = update.view(-1)[valid]
             
-            #ideally construct on device (not .to(device)) but not sure how
             shift_idxs = torch.LongTensor([[0] + pos]).to(points.device)
             shift_idxs = shift_idxs.repeat(idxs.size(0), 1)
             update_idxs = idxs + shift_idxs
@@ -82,21 +81,21 @@ class project(nn.Module):
 
     def smoothing_kernel(self):
         #"Generate 3 separate gaussian kernels with `sigma` stddev"
-        x = torch.arange(-self.kernel_size[0]//2 + 1., self.kernel_size[0]//2 + 1., device=device)
-        kernel_1d_x = torch.exp(-x**2 / (2. * self.sigma[0]**2))
-        kernel_1d_x = kernel_1d_x / kernel_1d_x.sum()
+        z = torch.arange(-self.kernel_size[0]//2 + 1., self.kernel_size[0]//2 + 1., device=device)
+        kernel_1d_z = torch.exp(-z**2 / (2. * self.sigma[0]**2))
+        kernel_1d_z = kernel_1d_z / kernel_1d_z.sum()
 
         y = torch.arange(-self.kernel_size[1]//2 + 1., self.kernel_size[1]//2 + 1., device=device)
         kernel_1d_y = torch.exp(-y**2 / (2. * self.sigma[1]**2))
         kernel_1d_y = kernel_1d_y / kernel_1d_y.sum()
 
-        z = torch.arange(-self.kernel_size[2]//2 + 1., self.kernel_size[2]//2 + 1., device=device)
-        kernel_1d_z = torch.exp(-z**2 / (2. * self.sigma[2]**2))
-        kernel_1d_z = kernel_1d_z / kernel_1d_z.sum()
+        x = torch.arange(-self.kernel_size[2]//2 + 1., self.kernel_size[2]//2 + 1., device=device)
+        kernel_1d_x = torch.exp(-x**2 / (2. * self.sigma[2]**2))
+        kernel_1d_x = kernel_1d_x / kernel_1d_x.sum()
 
-        k1 = kernel_1d_x.view(1, 1, 1, 1, -1)
+        k1 = kernel_1d_z.view(1, 1, 1, 1, -1)
         k2 = kernel_1d_y.view(1, 1, 1, -1, 1)
-        k3 = kernel_1d_z.view(1, 1, -1, 1, 1)
+        k3 = kernel_1d_x.view(1, 1, -1, 1, 1)
         
         return [k1, k2, k3]
 
