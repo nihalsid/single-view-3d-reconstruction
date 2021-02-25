@@ -6,7 +6,7 @@
 ## Description
 In this work, we are focusing on reconstructing scenes from a single image. We make use of IF-Net which focuses on shape completion from an incomplete 3D input. We explore the usage of IF-Net in the task of 3D reconstruction from images. We also explore its ability to work on complex scenes instead of simple shapes as was proposed in the paper. For more details, please check the full [report](3D_Reconstruction_from_a_Single_RGB_Image_report.pdf) and [presentation](presentation.pdf) of the project.
 
-For a brief 'Real-World-Experiment' see the test-report of the proposed architecture, note however that we used a more powerful depth regressor here [test-report](https://github.com/nihalsid/single-view-3d-reconstruction/blob/main/3d-Scene%20real%20world.pdf)
+For a brief 'Real-World-Experiment' see the test-report of the proposed architecture, note however that we used a more powerful depth regressor here [test-report](https://github.com/nihalsid/single-view-3d-reconstruction/blob/main/3d-Scene%20real%20world.pdf).
 
 ## Installation
 A linux system with cuda 9.0 is required.
